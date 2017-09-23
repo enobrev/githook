@@ -1,10 +1,13 @@
 {
     "server": {
-        "port": 5987,
+        "port": 9999,
         "ping": 1800000
     },
     "slack": {
         "webhook": "https://hooks.slack.com/services/PATH/TO/WEBHOOK"
+    },
+    "github": {
+        "secret": "This is not the greatest secret in the world.  This is just a tribute."
     },
     "builds": {
         "enobrev/githook": "/var/www/githook.enobrev.net"
