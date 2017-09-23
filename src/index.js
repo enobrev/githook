@@ -98,7 +98,8 @@
                         }
 
                         if (stderr) {
-                            fs.writeFileSync(sFile + '-err', stderr);
+                            sFile += '-err';
+                            fs.writeFileSync(sFile, stderr);
 
                             LOG.error({action: 'githook.build.std.error', log_file: sFile, output: stderr.split("\n")});
                             oSlack.webhook({
@@ -111,7 +112,8 @@
                                 text:     `I failed a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}>.  Error was: ${error.message}`
                             }, (err, response) => {});
                         } else {
-                            fs.writeFileSync(sFile + '-ok', stdout);
+                            sFile += '-ok';
+                            fs.writeFileSync(sFile, stdout);
 
                             LOG.info({
                                 action:     'githook.build.done',
