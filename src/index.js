@@ -4,6 +4,7 @@
     const fs     = require('fs');
     const http   = require('http');
     const exec   = require('child_process').exec;
+    const crypto = require('crypto');
     const Slack  = require('slack-node');
     const LOG    = require('./Logger');
     const CONFIG = require('../.config.json');
@@ -32,32 +33,39 @@
             });
 
             oRequest.on('end', () => {
-                let sBody;
                 let oBody;
                 try {
-                    sBody = Buffer.concat(aBody).toString();
+                    const sBody = Buffer.concat(aBody).toString();
+
+                    if (!!oHeaders['x-hub-signature']) {
+                        const sSigned = 'sha1=' + crypto.createHmac('sha1', CONFIG.github.secret).update(sBody).digest('hex');
+
+                        if (sSigned !== oHeaders['x-hub-signature']) {
+                            LOG.error({action: 'githook.build.signature.mismatch'});
+                            return;
+                        }
+                    }
+
                     oBody = JSON.parse(sBody);
 
                     LOG.info({
-                        action:     'githook.build.start',
+                        action:     'githook.build.ready',
                         sender:     oBody.sender.login,
                         repository: oBody.repository.full_name,
                         commit:     oBody.head_commit.id,
                         message:    oBody.head_commit.message,
                         body:       oBody
                     });
-
-                    oSlack.webhook({
-                        text: `I started a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}> by *${oBody.sender.login}* with message: ${oBody.head_commit.message}`
-                    }, (err, response) => {});
                 } catch (e) {
-                    LOG.warning({
+                    LOG.warn({
                         action:     'githook.build.start',
                         error:      {
                             name:    e.name,
                             message: e.message
                         }
                     });
+
+                    return;
                 }
 
                 const sPath = CONFIG.builds[oBody.repository.full_name];
@@ -78,6 +86,9 @@
                     command:     sCommand
                 });
 
+                oSlack.webhook({
+                    text: `I started a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}> by *${oBody.sender.login}* with message: ${oBody.head_commit.message}`
+                }, (err, response) => {});
 
                 exec(sCommand, // command line argument directly in string
                     (error, stdout, stderr) => {      // one easy function to capture data/errors
