@@ -1,0 +1,12 @@
+[Service]
+ExecStart=/usr/bin/node /var/www/githook.enobrev.net/src/index.js
+Restart=always
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=githook
+User=enobrev
+Group=enobrev
+WorkingDirectory=/var/www/githook.enobrev.net
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+{
+    "server": {
+        "port": 5987,
+        "ping": 1800000
+    },
+    "slack": {
+        "webhook": "https://hooks.slack.com/services/PATH/TO/WEBHOOK"
+    },
+    "builds": {
+        "enobrev/githook": "/var/www/githook.enobrev.net"
+    }
+}

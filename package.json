@@ -1,0 +1,16 @@
+{
+  "name": "githook",
+  "version": "1.0.0",
+  "description": "Githook CI Server",
+  "main": "githook.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Mark Armendariz <src@enobrev.com>",
+  "license": "MIT",
+  "dependencies": {
+    "slack-node":     "^0.1.8",
+    "winston":        "^2.2.0",
+    "winston-syslog": "^1.2.1"
+  }
+}
