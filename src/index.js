@@ -87,7 +87,7 @@
                 });
 
                 oSlack.webhook({
-                    text: `I started a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}> by *${oBody.sender.login}* with message: ${oBody.head_commit.message}`
+                    text: `I started a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}> by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`
                 }, (err, response) => {});
 
                 exec(sCommand, // command line argument directly in string
@@ -113,13 +113,13 @@
 
                             LOG.error({action: 'githook.build.std.error', log_file: sFile, output: aErrors});
                             oSlack.webhook({
-                                text: `I just finished a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}>.\nStdError Output:\n${aErrors.join("\n")}`
+                                text: `I just finished a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}>.\n\n*StdError Output:*\n> ${aErrors.join("\n>")}`
                             }, (err, response) => { });
                         } else if (error) {
                             LOG.error({action: 'githook.build.exec.error', output: error});
 
                             oSlack.webhook({
-                                text:     `I failed a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}>.  Error was: ${error.message}`
+                                text:     `I failed a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}>.\n>*Error:*\n> ${error.message}`
                             }, (err, response) => {});
                         } else {
                             sFile += '-ok';
@@ -135,7 +135,7 @@
                             });
 
                             oSlack.webhook({
-                                text:     `I finished a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}> by *${oBody.sender.login}* with message: ${oBody.head_commit.message}`
+                                text:     `I finished a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}> by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`
                             }, (err, response) => {});
                         }
 
