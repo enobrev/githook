@@ -93,9 +93,10 @@
                 exec(sCommand, // command line argument directly in string
                     (error, stdout, stderr) => {      // one easy function to capture data/errors
                         let sFile = ['/tmp/githook', oBody.head_commit.id].join('-');
+                        let aErrors = [];
 
                         if (stderr) {
-                            let aErrors = stderr.split("\n");
+                            aErrors = stderr.split("\n");
                             for (let i = aErrors.length - 1; i >= 0; i--) {
                                 const sError = aErrors[i].toLowerCase().trim();
                                 if (sError.length === 0
@@ -104,17 +105,15 @@
                                     aErrors.splice(i, 1);
                                 }
                             }
-
-                            stderr = aErrors.length > 0 ? aErrors.join("\n") : null;
                         }
 
-                        if (stderr) {
+                        if (aErrors.length > 0) {
                             sFile += '-err';
-                            fs.writeFileSync(sFile, stderr);
+                            fs.writeFileSync(sFile, aErrors.join("\n"));
 
-                            LOG.error({action: 'githook.build.std.error', log_file: sFile, output: stderr.split("\n")});
+                            LOG.error({action: 'githook.build.std.error', log_file: sFile, output: aErrors});
                             oSlack.webhook({
-                                text: `I just finished a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}>, but there _may_ be errors.  Check: ${sFile}-err`
+                                text: `I just finished a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}>.\nStdError Output:\n${aErrors.join("\n")}`
                             }, (err, response) => { });
                         } else if (error) {
                             LOG.error({action: 'githook.build.exec.error', output: error});
