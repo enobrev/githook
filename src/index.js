@@ -87,7 +87,38 @@
                 });
 
                 oSlack.webhook({
-                    text: `I started a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}> by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`
+                    attachments: [
+                        {
+                            fallback:   `I started a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}> by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
+                            title:      `Build Started for commit ${oBody.head_commit.id}`
+                            title_link: oBody.head_commit.url,
+                            text:       `Repo: <${oBody.repository.html_url}|${oBody.repository.full_name}>`,
+                            color:      '#666666',
+                            fields:     [
+                                {
+                                    title: 'Commit',
+                                    value: oBody.head_commit.id,
+                                    short: true
+                                },
+                                {
+                                    title: 'Repository',
+                                    value: oBody.repository.full_name,
+                                    short: true
+                                },
+                                {
+                                    title: 'Commiter',
+                                    value: oBody.sender.login,
+                                    short: true
+                                },
+                                {
+                                    title: 'Message',
+                                    value: oBody.head_commit.message,
+                                    short: false
+                                },
+
+                            ]
+                        }
+                    ]
                 }, (err, response) => {});
 
                 exec(sCommand, // command line argument directly in string
@@ -119,7 +150,7 @@
                             LOG.error({action: 'githook.build.exec.error', output: error});
 
                             oSlack.webhook({
-                                text:     `I failed a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}>.\n>*Error:*\n> ${error.message}`
+                                text: `I failed a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}>.\n>*Error:*\n> ${error.message}`
                             }, (err, response) => {});
                         } else {
                             sFile += '-ok';
