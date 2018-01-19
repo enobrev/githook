@@ -90,7 +90,7 @@
                     attachments: [
                         {
                             fallback:   `I started a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}> by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
-                            title:      `Build Started for commit ${oBody.head_commit.id}`
+                            title:      `Build Started for commit ${oBody.head_commit.id}`,
                             title_link: oBody.head_commit.url,
                             text:       `Repo: <${oBody.repository.html_url}|${oBody.repository.full_name}>`,
                             color:      '#666666',
