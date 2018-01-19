@@ -92,7 +92,11 @@
                             fallback:   `I started a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}> by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
                             title:      'Build Started',
                             title_link: oBody.head_commit.url,
+                            author_name: oBody.sender.login,
+                            author_link: oBody.sender.url,
+                            author_icon: oBody.sender.avatar_url,
                             text:       `Commit: <${oBody.head_commit.url}|${oBody.head_commit.id}>\n> ${oBody.head_commit.message}`,
+                            mrkdwn_in:  ["text"],
                             color:      '#666666',
                             fields:     [
                                 {
@@ -105,7 +109,6 @@
                                     value: oBody.sender.login,
                                     short: true
                                 }
-
                             ]
                         }
                     ]
