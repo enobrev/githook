@@ -90,29 +90,23 @@
                     attachments: [
                         {
                             fallback:   `I started a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}> by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
-                            title:      `Build Started for commit ${oBody.head_commit.id}`,
+                            title:      'Build Started',
                             title_link: oBody.head_commit.url,
-                            text:       `Repo: <${oBody.repository.html_url}|${oBody.repository.full_name}>`,
                             color:      '#666666',
                             fields:     [
                                 {
-                                    title: 'Commit',
-                                    value: oBody.head_commit.id,
-                                    short: true
-                                },
-                                {
                                     title: 'Repository',
-                                    value: oBody.repository.full_name,
+                                    value: `<${oBody.repository.html_url}|${oBody.repository.full_name}>`,
                                     short: true
                                 },
                                 {
-                                    title: 'Commiter',
-                                    value: oBody.sender.login,
+                                    title: 'Commit',
+                                    value: `<${oBody.head_commit.url}|${oBody.head_commit.id}>`,
                                     short: true
                                 },
                                 {
                                     title: 'Message',
-                                    value: oBody.head_commit.message,
+                                    value: `*${oBody.sender.login}*\n> ${oBody.head_commit.message}`,
                                     short: false
                                 },
 
