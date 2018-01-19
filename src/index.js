@@ -95,7 +95,7 @@
                             author_name: oBody.sender.login,
                             author_link: oBody.sender.url,
                             author_icon: oBody.sender.avatar_url,
-                            text:       `Commit: <${oBody.head_commit.url}|${oBody.head_commit.id}>\n> ${oBody.head_commit.message}`,
+                            text:       `> ${oBody.head_commit.message}`,
                             mrkdwn_in:  ["text"],
                             color:      '#666666',
                             fields:     [
@@ -105,8 +105,8 @@
                                     short: true
                                 },
                                 {
-                                    title: 'Commiter',
-                                    value: oBody.sender.login,
+                                    title: 'Commit',
+                                    value: `<${oBody.head_commit.url}|${oBody.head_commit.id.substring(0, 10) + '...'}>`,
                                     short: true
                                 }
                             ]
