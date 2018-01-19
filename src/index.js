@@ -218,6 +218,8 @@
                                         author_link: oBody.sender.url,
                                         author_icon: oBody.sender.avatar_url,
                                         color:       'good',
+                                        text:        `> ${oBody.head_commit.message}`,
+                                        mrkdwn_in:   ["text"],
                                         fields:     [
                                             {
                                                 title: 'Repository',
