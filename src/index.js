@@ -12,6 +12,22 @@
     let oSlack = new Slack();
     oSlack.setWebhook(CONFIG.slack.webhook);
 
+    let BUILDS = {};
+    Object.keys(CONFIG.github.sources).forEach(sApp => {
+        let oBuild = {
+            app:  sApp,
+            path: CONFIG.path.install[sApp]
+        };
+
+        if (oBuild.path) {
+            const aSource     = CONFIG.github.sources[sApp].split('#');
+            oBuild.repository = aSource[0];
+            oBuild.branch     = `refs/heads/${aSource.length > 1 && aSource[1] && aSource[1].length ? aSource[1] : 'master'}`;
+
+            BUILDS[oBuild.repository] = oBuild
+        }
+    });
+
     let handleHTTPRequest = function(oRequest, oResponse) {
         let oHeaders = oRequest.headers;
         let sMethod  = oRequest.method;
@@ -68,22 +84,42 @@
                     return;
                 }
 
-                const sPath = CONFIG.builds[oBody.repository.full_name];
+                const oBuild = BUILDS[oBody.repository.full_name];
 
-                if (!sPath) {
-                    LOG.warn({
+                if (!oBuild) {
+                    LOG.warning({
                         action:     'githook.build.repository.not_defined',
                         repository: oBody.repository.full_name,
+                    });
+
+                    console.log(BUILDS);
+
+                    return;
+                }
+
+                if (oBuild.branch !== oBody.ref) {
+                    LOG.debug({
+                        action:     'githook.build.repository.mismatched_branch',
+                        repository: oBody.repository.full_name,
+                        branch: {
+                            commit: oBody.ref,
+                            build:  oBuild.branch
+                        }
                     });
 
                     return;
                 }
 
-                const sCommand = `cd ${sPath} && make githook`;
+                LOG.info({
+                    action:  'githook.build.matched',
+                    build:   oBuild
+                });
+
+                const sCommand = `cd ${oBuild.path} && make githook`;
 
                 LOG.info({
                     action:     'githook.build.command',
-                    command:     sCommand
+                    command:    sCommand
                 });
 
                 oSlack.webhook({

@@ -7,9 +7,14 @@
         "webhook": "https://hooks.slack.com/services/PATH/TO/WEBHOOK"
     },
     "github": {
-        "secret": "This is not the greatest secret in the world.  This is just a tribute."
+        "secret": "This is not the greatest secret in the world.  This is just a tribute.",
+        "sources": {
+            "githook": "enobrev/githook#master"
+        }
     },
-    "builds": {
-        "enobrev/githook": "/var/www/githook.enobrev.net"
+    "path": {
+        "install": {
+            "githook": "/var/www/githook.enobrev.net"
+        }
     }
 }
