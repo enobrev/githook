@@ -9,8 +9,9 @@
   "author": "Mark Armendariz <src@enobrev.com>",
   "license": "MIT",
   "dependencies": {
-    "slack-node":     "^0.1.8",
-    "winston":        "^2.2.0",
+    "consul": "^0.30.0",
+    "slack-node": "^0.1.8",
+    "winston": "^2.2.0",
     "winston-syslog": "^1.2.1"
   }
 }

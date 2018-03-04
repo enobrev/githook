@@ -7,6 +7,7 @@
     const crypto = require('crypto');
     const Slack  = require('slack-node');
     const LOG    = require('./Logger');
+    const consul = require('consul')();
     const CONFIG = require('../.config.json');
 
     let oSlack = new Slack();
@@ -119,6 +120,25 @@
                 LOG.info({
                     action:  'githook.build.matched',
                     build:   oBuild
+                });
+
+                const sConsulKey = `repo/${oBuild.app}`;
+                consul.kv.set(`repo/${oBuild.app}`, oBody.head_commit.id, (oError, oResult) => {
+                    if (oError) {
+                        LOG.warning({
+                            action:  'githook.build.consul',
+                            key:     sConsulKey,
+                            value:   oBody.head_commit.id,
+                            error:   oError
+                        });
+                    } else {
+                        LOG.debug({
+                            action: 'githook.build.consul',
+                            key:    sConsulKey,
+                            value:  oBody.head_commit.id,
+                            result: oResult
+                        });
+                    }
                 });
 
                 const sCommand = `cd ${oBuild.path} && make githook`;
