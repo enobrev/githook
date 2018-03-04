@@ -41,7 +41,7 @@
     };
 
     const oTransportConsole = new (winston.transports.Console)({
-        app_name:  'icon-server',
+        app_name:  'githook-server',
         timestamp: true,
         colorize:  true,
         json:      true,
@@ -49,7 +49,7 @@
     });
 
     const oTransportSyslog = new (winston.transports.Syslog)({
-        app_name:  'icon-server',
+        app_name:  'githook-server',
         localhost: null, // Keep localhost out of syslog messages
         protocol:  'unix-connect',
         path:      '/dev/log',
