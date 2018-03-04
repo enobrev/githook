@@ -29,6 +29,12 @@
     });
 
     let handleHTTPRequest = function(oRequest, oResponse) {
+        if (oRequest.url === '/health') {
+            oResponse.writeHead(200);
+            oResponse.end();
+            return;
+        }
+
         let oHeaders = oRequest.headers;
         let sMethod  = oRequest.method;
         let sUrl     = oRequest.url;
