@@ -11,7 +11,7 @@
     const CONFIG = require('../.config.json');
 
     let oSlack = new Slack();
-    oSlack.setWebhook(CONFIG.slack.webhook);
+    oSlack.setWebhook(CONFIG.slack.webhook.githook);
 
     let BUILDS = {};
     Object.keys(CONFIG.github.sources).forEach(sApp => {
