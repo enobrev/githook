@@ -308,5 +308,5 @@
     LOG.notice({action: 'githook.init'});
 
     oSlack.webhook({
-        text:  "Hello! I'm here and waiting for github updates."
+        text:  "Hello! I'm here and waiting for github updates. to\n *" + Object.values(CONFIG.github.sources).join("\n * ")
     }, (err, response) => {});
