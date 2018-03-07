@@ -122,20 +122,38 @@
                     build:   oBuild
                 });
 
-                const sConsulKey = `repo/${oBuild.app}`;
-                consul.kv.set(`repo/${oBuild.app}`, oBody.head_commit.id, (oError, oResult) => {
+                const aMessage       = oBody.commits.map(oCommit => `> <${oCommit.url}|${oCommit.id.substring(0, 6)}>: ${oCommit.message}`);
+                const aLogMessage    = oBody.commits.map(oCommit => oCommit.message);
+                const sRepo          = `<${oBody.repository.html_url}|${oBody.repository.full_name}>`;
+                const sCompareHashes = oBody.compare.split('/').pop();
+                const sCompare       = `<${oBody.compare}|${sCompareHashes}>`;
+                const sConsulKey     = `repo/${oBuild.app}`;
+                const aFields        = [
+                    {
+                        title: 'Repository',
+                        value: sRepo,
+                        short: true
+                    },
+                    {
+                        title: 'Commits',
+                        value: sCompare,
+                        short: true
+                    }
+                ];
+
+                consul.kv.set(`repo/${oBuild.app}`, sCompareHashes, (oError, oResult) => {
                     if (oError) {
                         LOG.warning({
                             action:  'githook.build.consul',
                             key:     sConsulKey,
-                            value:   oBody.head_commit.id,
+                            value:   sCompareHashes,
                             error:   oError
                         });
                     } else {
                         LOG.debug({
                             action: 'githook.build.consul',
                             key:    sConsulKey,
-                            value:  oBody.head_commit.id,
+                            value:  sCompareHashes,
                             result: oResult
                         });
                     }
@@ -151,27 +169,16 @@
                 oSlack.webhook({
                     attachments: [
                         {
-                            fallback:    `I started a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}> by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
-                            title:       `Build Started - ${oBody.head_commit.id.substring(0, 6) + '...'}`,
-                            title_link:  oBody.head_commit.url,
+                            fallback:    `I started a Build for repo ${sRepo}, commit ${sCompare} by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
+                            title:       `Build Started - ${sCompareHashes}`,
+                            title_link:  oBody.compare,
                             author_name: oBody.sender.login,
                             author_link: oBody.sender.html_url,
                             author_icon: oBody.sender.avatar_url,
                             color:       '#666666',
-                            text:        `> ${oBody.head_commit.message}`,
+                            text:        aMessage.join("\n"),
                             mrkdwn_in:   ["text"],
-                            fields:      [
-                                {
-                                    title: 'Repository',
-                                    value: `<${oBody.repository.html_url}|${oBody.repository.full_name}>`,
-                                    short: true
-                                },
-                                {
-                                    title: 'Commit',
-                                    value: `<${oBody.head_commit.url}|${oBody.head_commit.id.substring(0, 15) + '...'}>`,
-                                    short: true
-                                }
-                            ]
+                            fields:      aFields
                         }
                     ]
                 }, (err, response) => {});
@@ -202,27 +209,16 @@
                             oSlack.webhook({
                                 attachments: [
                                     {
-                                        fallback:   `I just finished a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}>.\n\n*StdError Output:*\n> ${aErrors.join("\n>")}`,
-                                        title:      `Build Finished with stderr Output - ${oBody.head_commit.id.substring(0, 6) + '...'}`,
-                                        title_link:  oBody.head_commit.url,
+                                        fallback:   `I just finished a Build for repo ${sRepo} with stderr Output\n\n*StdError Output:*\n> ${aErrors.join("\n>")}`,
+                                        title:      `Build Finished with stderr Output - ${sCompareHashes}`,
+                                        title_link:  oBody.compare,
                                         author_name: oBody.sender.login,
                                         author_link: oBody.sender.html_url,
                                         author_icon: oBody.sender.avatar_url,
                                         color:       'warning',
                                         text:        `> ${aErrors.join("\n>")}`,
                                         mrkdwn_in:   ["text"],
-                                        fields:     [
-                                            {
-                                                title: 'Repository',
-                                                value: `<${oBody.repository.html_url}|${oBody.repository.full_name}>`,
-                                                short: true
-                                            },
-                                            {
-                                                title: 'Commit',
-                                                value: `<${oBody.head_commit.url}|${oBody.head_commit.id.substring(0, 15) + '...'}>`,
-                                                short: true
-                                            }
-                                        ]
+                                        fields:      aFields
                                     }
                                 ]
                             }, (err, response) => {});
@@ -233,27 +229,16 @@
                             oSlack.webhook({
                                 attachments: [
                                     {
-                                        fallback:    `I failed a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}>.\n>*Error:*\n> ${error.message}`,
-                                        title:       `Build Failed - ${oBody.head_commit.id.substring(0, 6) + '...'}`,
-                                        title_link:  oBody.head_commit.url,
+                                        fallback:    `I failed a Build for repo ${sRepo}.\n>*Error:*\n> ${error.message}`,
+                                        title:       `Build Failed - ${sCompareHashes}`,
+                                        title_link:  oBody.compare,
                                         author_name: oBody.sender.login,
                                         author_link: oBody.sender.html_url,
                                         author_icon: oBody.sender.avatar_url,
                                         color:       'danger',
                                         text:        `> ${error.message}`,
                                         mrkdwn_in:   ["text"],
-                                        fields:     [
-                                            {
-                                                title: 'Repository',
-                                                value: `<${oBody.repository.html_url}|${oBody.repository.full_name}>`,
-                                                short: true
-                                            },
-                                            {
-                                                title: 'Commit',
-                                                value: `<${oBody.head_commit.url}|${oBody.head_commit.id.substring(0, 15) + '...'}>`,
-                                                short: true
-                                            }
-                                        ]
+                                        fields:      aFields
                                     }
                                 ]
                             }, (err, response) => {});
@@ -265,35 +250,20 @@
                                 action:     'githook.build.done',
                                 sender:     oBody.sender.login,
                                 repository: oBody.repository.full_name,
-                                commit:     oBody.head_commit.id,
-                                message:    oBody.head_commit.message,
+                                commit:     sCompareHashes,
+                                message:    aLogMessage.join('\n'),
                                 log_file:   sFile
                             });
 
                             oSlack.webhook({
                                 attachments: [
                                     {
-                                        fallback:    `I finished a Build for repo <${oBody.repository.html_url}|${oBody.repository.full_name}>, commit <${oBody.head_commit.url}|${oBody.head_commit.id}> by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
-                                        title:       `Build Complete - ${oBody.head_commit.id.substring(0, 6) + '...'}`,
-                                        title_link:  oBody.head_commit.url,
-                                        author_name: oBody.sender.login,
-                                        author_link: oBody.sender.html_url,
-                                        author_icon: oBody.sender.avatar_url,
+                                        fallback:    `I finished a Build for repo ${sRepo}, commits ${sCompare} by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
+                                        title:       `Build Complete - ${sCompareHashes}`,
+                                        title_link:  oBody.compare,
                                         color:       'good',
-                                        text:        `> ${oBody.head_commit.message}`,
                                         mrkdwn_in:   ["text"],
-                                        fields:     [
-                                            {
-                                                title: 'Repository',
-                                                value: `<${oBody.repository.html_url}|${oBody.repository.full_name}>`,
-                                                short: true
-                                            },
-                                            {
-                                                title: 'Commit',
-                                                value: `<${oBody.head_commit.url}|${oBody.head_commit.id.substring(0, 15) + '...'}>`,
-                                                short: true
-                                            }
-                                        ]
+                                        fields:      aFields
                                     }
                                 ]
                             }, (err, response) => {});
