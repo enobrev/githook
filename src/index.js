@@ -138,6 +138,11 @@
                         title: 'Commits',
                         value: sCompare,
                         short: true
+                    },
+                    {
+                        title: 'Domain',
+                        value: CONFIG.uri.domain,
+                        short: true
                     }
                 ];
 
