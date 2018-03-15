@@ -7,6 +7,7 @@
     const crypto = require('crypto');
     const Slack  = require('slack-node');
     const LOG    = require('./Logger');
+    const consul = require('consul')();
     const CONFIG = require('../.config.json');
 
     let oSlack = new Slack();
@@ -145,12 +146,6 @@
                     }
                 ];
 
-                const sCommand = `cd ${oBuild.path} && make githook`;
-
-                LOG.info({
-                    action:     'githook.build.command',
-                    command:    sCommand
-                });
 
                 oSlack.webhook({
                     attachments: [
@@ -169,93 +164,53 @@
                     ]
                 }, (err, response) => {});
 
-                exec(sCommand, // command line argument directly in string
-                    (error, stdout, stderr) => {      // one easy function to capture data/errors
-                        let sFile = ['/tmp/githook', oBody.head_commit.id].join('-');
-                        let aErrors = [];
+                consul.kv.set(`repo/${oBuild.app}`, sCompareHashes, (oError, oResult) => {
+                    if (oError) {
+                        LOG.warning({
+                            action:  'githook.build.consul',
+                            key:     sConsulKey,
+                            value:   sCompareHashes,
+                            error:   oError
+                        });
 
-                        if (stderr) {
-                            aErrors = stderr.split("\n");
-                            for (let i = aErrors.length - 1; i >= 0; i--) {
-                                const sError = aErrors[i].toLowerCase().trim();
-                                if (sError.length === 0
-                                ||  sError.indexOf('warning') > -1
-                                ||  sError.indexOf('parsequery') > -1) {
-                                    aErrors.splice(i, 1);
+                        oSlack.webhook({
+                            attachments: [
+                                {
+                                    fallback:    `${CONFIG.uri.domain}: I had trouble starting a Build for repo ${sRepo}.\n>*Error:*\n> ${error.message}`,
+                                    title:       `${CONFIG.uri.domain}: Build Failed - ${sCompareHashes}`,
+                                    title_link:  oBody.compare,
+                                    author_name: oBody.sender.login,
+                                    author_link: oBody.sender.html_url,
+                                    author_icon: oBody.sender.avatar_url,
+                                    color:       'danger',
+                                    text:        `> ${error.message}`,
+                                    mrkdwn_in:   ["text"],
+                                    fields:      aFields
                                 }
-                            }
-                        }
+                            ]
+                        }, (err, response) => {});
+                    } else {
+                        LOG.debug({
+                            action: 'githook.build.consul',
+                            key:    sConsulKey,
+                            value:  sCompareHashes,
+                            result: oResult
+                        });
 
-                        if (aErrors.length > 0) {
-                            sFile += '-err';
-                            fs.writeFileSync(sFile, aErrors.join("\n"));
-
-                            LOG.error({action: 'githook.build.std.error', log_file: sFile, output: aErrors});
-
-                            oSlack.webhook({
-                                attachments: [
-                                    {
-                                        fallback:   `${CONFIG.uri.domain}: I just finished a Build for repo ${sRepo} with stderr Output\n\n*StdError Output:*\n> ${aErrors.join("\n>")}`,
-                                        title:      `${CONFIG.uri.domain}: Build Finished with stderr Output - ${sCompareHashes}`,
-                                        title_link:  oBody.compare,
-                                        author_name: oBody.sender.login,
-                                        author_link: oBody.sender.html_url,
-                                        author_icon: oBody.sender.avatar_url,
-                                        color:       'warning',
-                                        text:        `> ${aErrors.join("\n>")}`,
-                                        mrkdwn_in:   ["text"],
-                                        fields:      aFields
-                                    }
-                                ]
-                            }, (err, response) => {});
-
-                        } else if (error) {
-                            LOG.error({action: 'githook.build.exec.error', output: error});
-
-                            oSlack.webhook({
-                                attachments: [
-                                    {
-                                        fallback:    `${CONFIG.uri.domain}: I failed a Build for repo ${sRepo}.\n>*Error:*\n> ${error.message}`,
-                                        title:       `${CONFIG.uri.domain}: Build Failed - ${sCompareHashes}`,
-                                        title_link:  oBody.compare,
-                                        author_name: oBody.sender.login,
-                                        author_link: oBody.sender.html_url,
-                                        author_icon: oBody.sender.avatar_url,
-                                        color:       'danger',
-                                        text:        `> ${error.message}`,
-                                        mrkdwn_in:   ["text"],
-                                        fields:      aFields
-                                    }
-                                ]
-                            }, (err, response) => {});
-                        } else {
-                            sFile += '-ok';
-                            fs.writeFileSync(sFile, stdout);
-
-                            LOG.info({
-                                action:     'githook.build.done',
-                                sender:     oBody.sender.login,
-                                repository: oBody.repository.full_name,
-                                commit:     sCompareHashes,
-                                message:    aLogMessage.join('\n'),
-                                log_file:   sFile
-                            });
-
-                            oSlack.webhook({
-                                attachments: [
-                                    {
-                                        fallback:    `${CONFIG.uri.domain}: I finished a Build for repo ${sRepo}, commits ${sCompare} by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
-                                        title:       `${CONFIG.uri.domain}: Build Complete - ${sCompareHashes}`,
-                                        title_link:  oBody.compare,
-                                        color:       'good',
-                                        mrkdwn_in:   ["text"],
-                                        fields:      aFields
-                                    }
-                                ]
-                            }, (err, response) => {});
-                        }
-
-                    });
+                        oSlack.webhook({
+                            attachments: [
+                                {
+                                    fallback:    `${CONFIG.uri.domain}: I _think_ I finished a Build for repo ${sRepo}, commits ${sCompare} by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
+                                    title:       `${CONFIG.uri.domain}: Build Complete - ${sCompareHashes}`,
+                                    title_link:  oBody.compare,
+                                    color:       'good',
+                                    mrkdwn_in:   ["text"],
+                                    fields:      aFields
+                                }
+                            ]
+                        }, (err, response) => {});
+                    }
+                });
             });
         } else if (oHeaders && oHeaders['x-github-event'] === 'ping') {
             LOG.info({action: 'githook.build.request.ping', method: sMethod, url: sUrl});
