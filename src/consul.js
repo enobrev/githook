@@ -25,7 +25,7 @@
                 GithookLogger.w('config.not_available');
                 setTimeout(preInit, 1000);
             } else {
-                GithookLogger.w('config.ready');
+                GithookLogger.d('config.ready');
                 CONFIG = require(sConfigPath);
                 init();
             }
