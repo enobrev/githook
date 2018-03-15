@@ -296,11 +296,12 @@
             }
         });
 
+        const sMessage = `Hello ${CONFIG.uri.domain}! I'm here and waiting for github updates. to\n * ${Object.values(CONFIG.github.sources).join("\n * ")}`;
         oSlack.setWebhook(CONFIG.slack.webhook.githook);
         oSlack.webhook({
-            text:  `Hello ${CONFIG.uri.domain}! I'm here and waiting for github updates. to\n * ${Object.values(CONFIG.github.sources).join("\n * ")}`
+            text: sMessage
         }, (err, response) => {
-            GithookLogger.d('githook.slack.greeted');
+            GithookLogger.d('githook.slack.greeted', {message: sMessage});
         });
 
         GithookLogger.n('githook.configured');
