@@ -1,35 +1,46 @@
 "use strict";
 
-    const os     = require('os');
-    const fs     = require('fs');
-    const http   = require('http');
-    const exec   = require('child_process').exec;
-    const crypto = require('crypto');
-    const Slack  = require('slack-node');
-    const LOG    = require('./Logger');
-    const consul = require('consul')();
-    const CONFIG = require('../.config.json');
+    const fs       = require('fs');
+    const http     = require('http');
+    const consul   = require('consul')();
+    const crypto   = require('crypto');
+    const Slack    = require('slack-node');
+    const {Logger} = require('enobrev-node-tools');
 
+    const sConfigPath = '/etc/welco/config.githook.json';
+
+    let CONFIG;
     let oSlack = new Slack();
-    oSlack.setWebhook(CONFIG.slack.webhook.githook);
-
     let BUILDS = {};
-    Object.keys(CONFIG.github.sources).forEach(sApp => {
-        let oBuild = {
-            app:  sApp,
-            path: CONFIG.path.install[sApp]
-        };
 
-        if (oBuild.path) {
-            const aSource     = CONFIG.github.sources[sApp].split('#');
-            oBuild.repository = aSource[0];
-            oBuild.branch     = `refs/heads/${aSource.length > 1 && aSource[1] && aSource[1].length ? aSource[1] : 'master'}`;
+    const GithookLogger = new Logger({
+        service: 'GithookConsul',
+        console: false,
+        syslog:  true
+    });
+    
+    const preInit = () => {
+        fs.access(sConfigPath, fs.constants.R_OK, oError => {
+            if (oError) {
+                GithookLogger.w('config.not_available');
+                setTimeout(preInit, 1000);
+            } else {
+                GithookLogger.w('config.ready');
+                CONFIG = require(sConfigPath);
+                init();
+            }
+        });
+    };
 
-            BUILDS[oBuild.repository] = oBuild
-        }
+    preInit();
+
+    process.on('SIGHUP', () => {
+        GithookLogger.d('config.sighup.reload');
+        delete require.cache[sConfigPath];
+        config();
     });
 
-    let handleHTTPRequest = function(oRequest, oResponse) {
+    const handleHTTPRequest = function(oRequest, oResponse) {
         if (oRequest.url === '/health') {
             oResponse.writeHead(200);
             oResponse.end();
@@ -42,10 +53,10 @@
         let aBody    = [];
 
         if (oHeaders && oHeaders['x-github-event'] === 'push') {
-            LOG.debug({action: 'githook.build.request', delivery: oHeaders['x-github-delivery'], method: sMethod, url: sUrl});
+            GithookLogger.d('githook.build.request', {delivery: oHeaders['x-github-delivery'], method: sMethod, url: sUrl});
 
             oRequest.on('error', oError => {
-                LOG.error({action: 'githook.build.request.error', error: {
+                GithookLogger.e('githook.build.request.error', {error: {
                     name:    oError.name,
                     message: oError.message
                 }});
@@ -64,15 +75,14 @@
                         const sSigned = 'sha1=' + crypto.createHmac('sha1', CONFIG.github.secret).update(sBody).digest('hex');
 
                         if (sSigned !== oHeaders['x-hub-signature']) {
-                            LOG.error({action: 'githook.build.signature.mismatch'});
+                            GithookLogger.e('githook.build.signature.mismatch');
                             return;
                         }
                     }
 
                     oBody = JSON.parse(sBody);
 
-                    LOG.info({
-                        action:     'githook.build.ready',
+                    GithookLogger.i('githook.build.ready', {
                         sender:     oBody.sender.login,
                         repository: oBody.repository.full_name,
                         commit:     oBody.head_commit.id,
@@ -80,8 +90,7 @@
                         body:       oBody
                     });
                 } catch (e) {
-                    LOG.warn({
-                        action:     'githook.build.start',
+                    GithookLogger.w('githook.build.start', {
                         error:      {
                             name:    e.name,
                             message: e.message
@@ -94,8 +103,7 @@
                 const oBuild = BUILDS[oBody.repository.full_name];
 
                 if (!oBuild) {
-                    LOG.warning({
-                        action:     'githook.build.repository.not_defined',
+                    GithookLogger.w('githook.build.repository.not_defined', {
                         repository: oBody.repository.full_name,
                     });
 
@@ -105,8 +113,7 @@
                 }
 
                 if (oBuild.branch !== oBody.ref) {
-                    LOG.debug({
-                        action:     'githook.build.repository.mismatched_branch',
+                    GithookLogger.d('githook.build.repository.mismatched_branch', {
                         repository: oBody.repository.full_name,
                         branch: {
                             commit: oBody.ref,
@@ -117,8 +124,7 @@
                     return;
                 }
 
-                LOG.info({
-                    action:  'githook.build.matched',
+                GithookLogger.i('githook.build.matched', {
                     build:   oBuild
                 });
 
@@ -166,8 +172,7 @@
 
                 consul.kv.set(`repo/${oBuild.app}`, sCompareHashes, (oError, oResult) => {
                     if (oError) {
-                        LOG.warning({
-                            action:  'githook.build.consul',
+                        GithookLogger.w('githook.build.consul', {
                             key:     sConsulKey,
                             value:   sCompareHashes,
                             error:   oError
@@ -190,8 +195,7 @@
                             ]
                         }, (err, response) => {});
                     } else {
-                        LOG.debug({
-                            action: 'githook.build.consul',
+                        GithookLogger.d('githook.build.consul', {
                             key:    sConsulKey,
                             value:  sCompareHashes,
                             result: oResult
@@ -213,36 +217,57 @@
                 });
             });
         } else if (oHeaders && oHeaders['x-github-event'] === 'ping') {
-            LOG.info({action: 'githook.build.request.ping', method: sMethod, url: sUrl});
+            GithookLogger.i('githook.build.request.ping', {method: sMethod, url: sUrl});
         } else if (sUrl === '/') {
             oResponse.writeHead(200, {'Content-Type': 'text/plain'});
             oResponse.write('ARRRG');
             oResponse.end();
             return;
         } else {
-            LOG.warning({action: 'githook.build.request.weird', method: sMethod, url: sUrl});
+            GithookLogger.w('githook.build.request.weird', {method: sMethod, url: sUrl});
         }
 
         oResponse.writeHead(202, {'Content-Type': 'text/plain'});
         oResponse.end();
     };
 
-    http.createServer(handleHTTPRequest).listen(CONFIG.server.port);
+    const config = function() {
+        BUILDS = {};
+        Object.keys(CONFIG.github.sources).forEach(sApp => {
+            let oBuild = {
+                app:  sApp,
+                path: CONFIG.path.install[sApp]
+            };
 
-    let ping = () => {
-        LOG.info({
-            action:    'githook.ping',
-            hostname:   os.hostname(),
-            pid:        process.pid,
-            port:       CONFIG.server.port
+            if (oBuild.path) {
+                const aSource     = CONFIG.github.sources[sApp].split('#');
+                oBuild.repository = aSource[0];
+                oBuild.branch     = `refs/heads/${aSource.length > 1 && aSource[1] && aSource[1].length ? aSource[1] : 'master'}`;
+
+                BUILDS[oBuild.repository] = oBuild
+            }
         });
+
+        oSlack.setWebhook(CONFIG.slack.webhook.githook);
+        oSlack.webhook({
+            text:  `Hello ${CONFIG.uri.domain}! I'm here and waiting for github updates. to\n * ${Object.values(CONFIG.github.sources).join("\n * ")}`
+        }, (err, response) => {
+            GithookLogger.d('githook.slack.greeted');
+        });
+
+        GithookLogger.n('githook.configured');
     };
 
-    ping();
-    setInterval(ping, CONFIG.server.ping);
+    let bInitOnce = false;
 
-    LOG.notice({action: 'githook.init'});
+    const init = function() {
+        if (bInitOnce) {
+            return;
+        }
 
-    oSlack.webhook({
-        text:  "Hello! I'm here and waiting for github updates. to\n * " + Object.values(CONFIG.github.sources).join("\n * ")
-    }, (err, response) => {});
+        bInitOnce = true;
+
+        config();
+        http.createServer(handleHTTPRequest).listen(CONFIG.server.port);
+        GithookLogger.n('githook.init');
+    };

@@ -10,8 +10,7 @@
   "license": "MIT",
   "dependencies": {
     "consul": "^0.30.0",
-    "slack-node": "^0.1.8",
-    "winston": "^2.2.0",
-    "winston-syslog": "^1.2.1"
+    "enobrev-node-tools": "enobrev/node-tools",
+    "slack-node": "^0.1.8"
   }
 }

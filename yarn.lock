@@ -111,6 +111,13 @@ ecc-jsbn@~0.1.1:
   dependencies:
     jsbn "~0.1.0"
 
+enobrev-node-tools@enobrev/node-tools:
+  version "0.1.1"
+  resolved "https://codeload.github.com/enobrev/node-tools/tar.gz/25c81084dfd4963ca10fea12c48c8851788b45b1"
+  dependencies:
+    winston "^2.4.1"
+    winston-syslog "1.2.6"
+
 extend@^3.0.0, extend@~3.0.1:
   version "3.0.1"
   resolved "https://registry.yarnpkg.com/extend/-/extend-3.0.1.tgz#a755ea7bc1adfcc5a31ce7e762dbaadc5e636444"
@@ -375,7 +382,7 @@ when@^3.7.7:
   version "3.7.8"
   resolved "https://registry.yarnpkg.com/when/-/when-3.7.8.tgz#c7130b6a7ea04693e842cdc9e7a1f2aa39a39f82"
 
-winston-syslog@^1.2.1:
+winston-syslog@1.2.6:
   version "1.2.6"
   resolved "https://registry.yarnpkg.com/winston-syslog/-/winston-syslog-1.2.6.tgz#4e7990ed0a9f1932187ddd6ec9e038357980961f"
   dependencies:
@@ -384,9 +391,18 @@ winston-syslog@^1.2.1:
   optionalDependencies:
     unix-dgram "~0.2.1"
 
-winston@^2.2.0:
-  version "2.3.1"
-  resolved "https://registry.yarnpkg.com/winston/-/winston-2.3.1.tgz#0b48420d978c01804cf0230b648861598225a119"
+winston-syslog@^2.0.0:
+  version "2.0.0"
+  resolved "https://registry.yarnpkg.com/winston-syslog/-/winston-syslog-2.0.0.tgz#e41330ecffe37c1971e5d1144eff9ace32d5ba2c"
+  dependencies:
+    cycle "~1.0.3"
+    glossy "0.x.x"
+  optionalDependencies:
+    unix-dgram "~0.2.1"
+
+winston@^2.4.1:
+  version "2.4.1"
+  resolved "https://registry.yarnpkg.com/winston/-/winston-2.4.1.tgz#a3a9265105564263c6785b4583b8c8aca26fded6"
   dependencies:
     async "~1.0.0"
     colors "1.0.x"
