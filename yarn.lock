@@ -75,7 +75,7 @@ combined-stream@^1.0.5, combined-stream@~1.0.5:
   dependencies:
     delayed-stream "~1.0.0"
 
-consul@^0.30.0:
+consul@0.30.0:
   version "0.30.0"
   resolved "https://registry.yarnpkg.com/consul/-/consul-0.30.0.tgz#8ae6719b46674dd15a95b7614881bfc5b9e4eac3"
   dependencies:
@@ -116,6 +116,13 @@ enobrev-node-tools@enobrev/node-tools:
   resolved "https://codeload.github.com/enobrev/node-tools/tar.gz/25c81084dfd4963ca10fea12c48c8851788b45b1"
   dependencies:
     winston "^2.4.1"
+    winston-syslog "^2.0.0"
+
+"enobrev-node-tools@https://github.com/enobrev/node-tools.git#35ab01dd0bb6c91bf62f5620fa8f6425d9bcdac2":
+  version "0.1.1"
+  resolved "https://github.com/enobrev/node-tools.git#35ab01dd0bb6c91bf62f5620fa8f6425d9bcdac2"
+  dependencies:
+    winston "2.4.1"
     winston-syslog "1.2.6"
 
 extend@^3.0.0, extend@~3.0.1:
@@ -309,7 +316,7 @@ safe-buffer@^5.0.1, safe-buffer@^5.1.1:
   version "5.1.1"
   resolved "https://registry.yarnpkg.com/safe-buffer/-/safe-buffer-5.1.1.tgz#893312af69b2123def71f57889001671eeb2c853"
 
-slack-node@^0.1.8:
+slack-node@0.1.8:
   version "0.1.8"
   resolved "https://registry.yarnpkg.com/slack-node/-/slack-node-0.1.8.tgz#cda98de8681485b301dc6742ddc3897117fad349"
   dependencies:
@@ -400,7 +407,7 @@ winston-syslog@^2.0.0:
   optionalDependencies:
     unix-dgram "~0.2.1"
 
-winston@^2.4.1:
+winston@2.4.1, winston@^2.4.1:
   version "2.4.1"
   resolved "https://registry.yarnpkg.com/winston/-/winston-2.4.1.tgz#a3a9265105564263c6785b4583b8c8aca26fded6"
   dependencies:

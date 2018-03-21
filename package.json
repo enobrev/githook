@@ -9,8 +9,8 @@
   "author": "Mark Armendariz <src@enobrev.com>",
   "license": "MIT",
   "dependencies": {
-    "consul": "^0.30.0",
-    "enobrev-node-tools": "enobrev/node-tools",
-    "slack-node": "^0.1.8"
+    "consul": "0.30.0",
+    "enobrev-node-tools": "https://github.com/enobrev/node-tools.git#35ab01dd0bb6c91bf62f5620fa8f6425d9bcdac2",
+    "slack-node": "0.1.8"
   }
 }
