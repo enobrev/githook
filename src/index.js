@@ -5,7 +5,7 @@
     const exec     = require('child_process').exec;
     const crypto   = require('crypto');
     const Slack    = require('slack-node');
-    const {Logger} = require('enobrev-node-tools');
+    const {Logger} = require('winston-rsyslog-cee');
 
     const sConfigPath = '/etc/welco/config.githook.json';
 

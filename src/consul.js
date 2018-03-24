@@ -5,7 +5,7 @@
     const consul   = require('consul')();
     const crypto   = require('crypto');
     const Slack    = require('slack-node');
-    const {Logger} = require('enobrev-node-tools');
+    const {Logger} = require('winston-rsyslog-cee');
 
     const sConfigPath = '/etc/welco/config.githook.json';
 
