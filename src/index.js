@@ -207,7 +207,7 @@
                 oActions.consul = ['upload', (_, fCallback) => {
                     const oTimer = oLogger.startTimer('consul');
 
-                    consul.kv.set(`/${oBuild.app}/release`, oBody.head_commit.id, (oError, oResult) => {
+                    consul.kv.set(`${oBuild.app}/release`, oBody.head_commit.id, (oError, oResult) => {
                         oLogger.dt(oTimer);
                         fCallback(oError, oResult);
                     });
