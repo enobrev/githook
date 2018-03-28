@@ -192,7 +192,7 @@
                         if (oResult.stderr && oResult.stderr.length > 0) {
                             const aStdErr = oResult.stderr.split('\n');
                             if (aStdErr.length > 0) {
-                                oResult.stderr = aStdErr.filter(sError => sError.strpos('peer dependency') === -1);  // Yarn adds peer dependency warnings to stderr for some stupid reason - even in silent mode
+                                oResult.stderr = aStdErr.filter(sError => sError.indexOf('peer dependency') === -1);  // Yarn adds peer dependency warnings to stderr for some stupid reason - even in silent mode
                             }
                         }
 
