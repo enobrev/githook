@@ -185,7 +185,7 @@
                     reset:                       cb  => TimedCommand('reset',     `cd ${oBuild.path} && git reset --hard HEAD --quiet`,             cb),
                     checkout:  ['reset',     (_, cb) => TimedCommand('checkout',  `cd ${oBuild.path} && git checkout ${oBuild.branch} --quiet`,     cb)],
                     pull:      ['checkout',  (_, cb) => TimedCommand('pull',      `cd ${oBuild.path} && git pull --quiet`,                          cb)],
-                    make:      ['pull',      (_, cb) => TimedCommand('make',      `cd ${oBuild.path} && make githook2`,                             cb)],
+                    make:      ['pull',      (_, cb) => TimedCommand('make',      `cd ${oBuild.path} && make githook`,                              cb)],
                     tar:       ['make',      (_, cb) => TimedCommand('tar',       `tar --exclude=${sFile} -czf ${sOutputFile} -C ${oBuild.path} .`, cb)]
                 };
 
