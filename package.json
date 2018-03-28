@@ -9,6 +9,8 @@
   "author": "Mark Armendariz <src@enobrev.com>",
   "license": "MIT",
   "dependencies": {
+    "async": "^2.6.0",
+    "aws-parameter-store": "^0.1.1",
     "consul": "0.30.0",
     "slack-node": "0.1.8",
     "winston-rsyslog-cee": "0.1.2"

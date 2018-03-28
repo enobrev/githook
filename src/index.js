@@ -1,9 +1,13 @@
 "use strict";
 
     const fs       = require('fs');
+    const path     = require('path');
     const http     = require('http');
+    const AWS      = require('aws-sdk');
+    const AWS_PS   = require('aws-parameter-store').default;
     const exec     = require('child_process').exec;
     const crypto   = require('crypto');
+    const async    = require('async');
     const Slack    = require('slack-node');
     const {Logger} = require('winston-rsyslog-cee');
 
@@ -12,27 +16,28 @@
     let CONFIG;
     let oSlack = new Slack();
     let BUILDS = {};
+    let S3;
 
     const GithookLogger = new Logger({
-        service: 'GithookMake',
+        service: 'Githook',
         console: false,
         syslog:  true
     });
 
-    const preInit = () => {
+    const loadConfig = () => {
         fs.access(sConfigPath, fs.constants.R_OK, oError => {
             if (oError) {
                 GithookLogger.w('config.not_available');
-                setTimeout(preInit, 1000);
+                setTimeout(loadConfig, 1000);
             } else {
                 GithookLogger.d('config.ready');
                 CONFIG = require(sConfigPath);
-                init();
+                config();
             }
         });
     };
-
-    preInit();
+    
+    loadConfig();
 
     process.on('SIGHUP', () => {
         GithookLogger.d('config.sighup.reload');
@@ -47,16 +52,22 @@
             return;
         }
 
+        const oLogger  = new Logger({
+            service: 'Githook',
+            console: false,
+            syslog:  true
+        });
+
         let oHeaders = oRequest.headers;
         let sMethod  = oRequest.method;
         let sUrl     = oRequest.url;
         let aBody    = [];
 
         if (oHeaders && oHeaders['x-github-event'] === 'push') {
-            GithookLogger.d('githook.build.request', {delivery: oHeaders['x-github-delivery'], method: sMethod, url: sUrl});
+            oLogger.d('request', {delivery: oHeaders['x-github-delivery'], method: sMethod, url: sUrl});
 
             oRequest.on('error', oError => {
-                GithookLogger.e('githook.build.request.error', {
+                oLogger.e('request.error', {
                     error: {
                         name:    oError.name,
                         message: oError.message
@@ -77,14 +88,14 @@
                         const sSigned = 'sha1=' + crypto.createHmac('sha1', CONFIG.github.secret).update(sBody).digest('hex');
 
                         if (sSigned !== oHeaders['x-hub-signature']) {
-                            GithookLogger.e('githook.build.signature.mismatch');
+                            oLogger.e('signature.mismatch');
                             return;
                         }
                     }
 
                     oBody = JSON.parse(sBody);
 
-                    GithookLogger.i('githook.build.ready', {
+                    oLogger.i('ready', {
                         sender:     oBody.sender.login,
                         repository: oBody.repository.full_name,
                         commit:     oBody.head_commit.id,
@@ -92,7 +103,7 @@
                         body:       oBody
                     });
                 } catch (e) {
-                    GithookLogger.w('githook.build.start', {
+                    oLogger.w('start', {
                         error:      {
                             name:    e.name,
                             message: e.message
@@ -102,221 +113,262 @@
                     return;
                 }
 
+                oLogger.setPurpose(oBody.repository.full_name);
+                
                 const oBuild = BUILDS[oBody.repository.full_name];
 
                 if (!oBuild) {
-                    GithookLogger.w('githook.build.repository.not_defined', {
+                    oLogger.w('repository.not_defined', {
                         repository: oBody.repository.full_name,
                     });
-
-                    console.log(BUILDS);
 
                     return;
                 }
 
-                if (oBuild.branch !== oBody.ref) {
-                    GithookLogger.d('githook.build.repository.mismatched_branch', {
+                if (oBuild.branch_ref !== oBody.ref) {
+                    oLogger.d('repository.mismatched_branch', {
                         repository: oBody.repository.full_name,
                         branch: {
                             commit: oBody.ref,
-                            build:  oBuild.branch
+                            build:  oBuild.branch_ref
                         }
                     });
 
                     return;
                 }
 
-                GithookLogger.i('githook.build.matched', {
+                oLogger.i('matched', {
                     build:   oBuild
                 });
 
-                const aMessage       = oBody.commits.map(oCommit => `> <${oCommit.url}|${oCommit.id.substring(0, 6)}>: ${oCommit.message}`);
-                const aLogMessage    = oBody.commits.map(oCommit => oCommit.message);
+                const aMessage       = oBody.commits.map(oCommit => `<${oCommit.url}|${oCommit.id.substring(0, 6)}>: ${oCommit.message}`);
                 const sRepo          = `<${oBody.repository.html_url}|${oBody.repository.full_name}>`;
                 const sCompareHashes = oBody.compare.split('/').pop();
                 const sCompare       = `<${oBody.compare}|${sCompareHashes}>`;
-                const sConsulKey     = `repo/${oBuild.app}`;
-                const aFields        = [
-                    {
-                        title: 'Repository',
-                        value: sRepo,
-                        short: true
-                    },
-                    {
-                        title: 'Commits',
-                        value: sCompare,
-                        short: true
-                    },
-                    {
-                        title: 'Domain',
-                        value: CONFIG.uri.domain,
-                        short: true
-                    }
-                ];
-
-                const sCommand = `cd ${oBuild.path} && make githook`;
-
-                GithookLogger.i('githook.build.command', {
-                    command:    sCommand
-                });
 
                 oSlack.webhook({
                     attachments: [
                         {
                             fallback:    `${CONFIG.uri.domain}: I started a Build for repo ${sRepo}, commit ${sCompare} by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
-                            title:       `${CONFIG.uri.domain}: Build Started - ${sCompareHashes}`,
+                            title:       "Build Started",
                             title_link:  oBody.compare,
                             author_name: oBody.sender.login,
                             author_link: oBody.sender.html_url,
                             author_icon: oBody.sender.avatar_url,
                             color:       '#666666',
+                            text:        `${CONFIG.uri.domain} - ${sRepo} - ${sCompare}`,
+                            mrkdwn_in:   ["text"]
+                        },
+                        {
                             text:        aMessage.join("\n"),
-                            mrkdwn_in:   ["text"],
-                            fields:      aFields
+                            mrkdwn_in:   ["text"]
                         }
                     ]
                 }, (err, response) => {});
 
-                exec(sCommand, // command line argument directly in string
-                    (error, stdout, stderr) => {      // one easy function to capture data/errors
-                        let sFile = ['/tmp/githook', oBody.head_commit.id].join('-');
-                        let aErrors = [];
 
-                        if (stderr) {
-                            aErrors = stderr.split("\n");
-                            for (let i = aErrors.length - 1; i >= 0; i--) {
-                                const sError = aErrors[i].toLowerCase().trim();
-                                if (sError.length === 0
-                                ||  sError.indexOf('warning') > -1
-                                ||  sError.indexOf('parsequery') > -1) {
-                                    aErrors.splice(i, 1);
-                                }
-                            }
-                        }
+                const sFile       = `${oBody.head_commit.id}.tgz`;
+                const sOutputFile = path.join(CONFIG.path.cache, sFile);
+                const sReleaseKey = path.join(CONFIG.aws.path_release, oBuild.app, sFile);
+                const sReleaseURI = `https://${CONFIG.aws.hostname}/${CONFIG.aws.bucket_release}/${sReleaseKey}`;
 
-                        if (aErrors.length > 0) {
-                            sFile += '-err';
-                            fs.writeFileSync(sFile, aErrors.join("\n"));
+                const TimedCommand = (sAction, sCommand, fCallback) => {
+                    const oTimer = oLogger.startTimer(sAction);
+                    exec(sCommand, (oError, sStdOut, sStdError) => {
+                        oLogger.dt(oTimer);
+                        fCallback(oError, {command: sCommand, stdout: sStdOut, stderr: sStdError});
+                    })
+                };
 
-                            GithookLogger.e('githook.build.std.error', {log_file: sFile, output: aErrors});
+                const oActions = {
+                    reset:                       cb  => TimedCommand('reset',     `cd ${oBuild.path} && git reset --hard HEAD --quiet`,             cb),
+                    checkout:  ['reset',     (_, cb) => TimedCommand('checkout',  `cd ${oBuild.path} && git checkout ${oBuild.branch} --quiet`,     cb)],
+                    pull:      ['checkout',  (_, cb) => TimedCommand('pull',      `cd ${oBuild.path} && git pull --quiet`,                          cb)],
+                    make:      ['pull',      (_, cb) => TimedCommand('make',      `cd ${oBuild.path} && make githook2`,                             cb)],
+                    tar:       ['make',      (_, cb) => TimedCommand('tar',       `tar --exclude=${sFile} -czf ${sOutputFile} -C ${oBuild.path} .`, cb)]
+                };
 
-                            oSlack.webhook({
-                                attachments: [
-                                    {
-                                        fallback:   `${CONFIG.uri.domain}: I just finished a Build for repo ${sRepo} with stderr Output\n\n*StdError Output:*\n> ${aErrors.join("\n>")}`,
-                                        title:      `${CONFIG.uri.domain}: Build Finished with stderr Output - ${sCompareHashes}`,
-                                        title_link:  oBody.compare,
-                                        author_name: oBody.sender.login,
-                                        author_link: oBody.sender.html_url,
-                                        author_icon: oBody.sender.avatar_url,
-                                        color:       'warning',
-                                        text:        `> ${aErrors.join("\n>")}`,
-                                        mrkdwn_in:   ["text"],
-                                        fields:      aFields
-                                    }
-                                ]
-                            }, (err, response) => {});
+                oActions.upload = ['tar',  (_, fCallback) => {
+                    const oTimer = oLogger.startTimer('upload');
 
-                        } else if (error) {
-                            GithookLogger.e('githook.build.exec.error', {output: error});
-
-                            oSlack.webhook({
-                                attachments: [
-                                    {
-                                        fallback:    `${CONFIG.uri.domain}: I failed a Build for repo ${sRepo}.\n>*Error:*\n> ${error.message}`,
-                                        title:       `${CONFIG.uri.domain}: Build Failed - ${sCompareHashes}`,
-                                        title_link:  oBody.compare,
-                                        author_name: oBody.sender.login,
-                                        author_link: oBody.sender.html_url,
-                                        author_icon: oBody.sender.avatar_url,
-                                        color:       'danger',
-                                        text:        `> ${error.message}`,
-                                        mrkdwn_in:   ["text"],
-                                        fields:      aFields
-                                    }
-                                ]
-                            }, (err, response) => {});
-                        } else {
-                            sFile += '-ok';
-                            fs.writeFileSync(sFile, stdout);
-
-                            GithookLogger.i('githook.build.done', {
-                                sender:     oBody.sender.login,
-                                repository: oBody.repository.full_name,
-                                commit:     sCompareHashes,
-                                message:    aLogMessage.join('\n'),
-                                log_file:   sFile
-                            });
-
-                            oSlack.webhook({
-                                attachments: [
-                                    {
-                                        fallback:    `${CONFIG.uri.domain}: I finished a Build for repo ${sRepo}, commits ${sCompare} by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
-                                        title:       `${CONFIG.uri.domain}: Build Complete - ${sCompareHashes}`,
-                                        title_link:  oBody.compare,
-                                        color:       'good',
-                                        mrkdwn_in:   ["text"],
-                                        fields:      aFields
-                                    }
-                                ]
-                            }, (err, response) => {});
-                        }
-
+                    S3.upload({
+                        Bucket:         CONFIG.aws.bucket_release,
+                        Key:            sReleaseKey,
+                        Body:           fs.readFileSync(sOutputFile),
+                        ACL:            'private',
+                        ContentType:    'application/gzip'
+                    }, (oError, oResponse) => {
+                        oLogger.dt(oTimer, {url: sReleaseURI});
+                        fCallback(oError, oResponse);
                     });
+                }];
+
+                oActions.parameter_store = ['upload', (_, fCallback) => {
+                    const oTimer     = oLogger.startTimer('parameter_store');
+                    const bOverwrite = true;
+
+                    AWS_PS.put(`/${CONFIG.environment}/${oBuild.app}/release`, oBody.head_commit.id, AWS_PS.TYPE_STRING, bOverwrite, (oError, oResponse) => {
+                        oLogger.dt(oTimer);
+                        fCallback(oError, oResponse);
+                    });
+                }];
+
+                async.auto(oActions, (oError, oResults) => {
+                    if (oError) {
+                        oLogger.e('error', {output: oError, build: JSON.stringify(oResults)});
+
+                        oSlack.webhook({
+                            attachments: [
+                                {
+                                    fallback:    `${CONFIG.uri.domain}: I failed a Build for repo ${sRepo}.\n>*Error:*\n> ${oError.message}`,
+                                    title:       `${CONFIG.uri.domain} - ${sRepo} - ${sCompareHashes} - Build Failed`,
+                                    title_link:  oBody.compare,
+                                    author_name: oBody.sender.login,
+                                    author_link: oBody.sender.html_url,
+                                    author_icon: oBody.sender.avatar_url,
+                                    color:       'danger',
+                                    text:        `> ${oError.message}`,
+                                    mrkdwn_in:   ["text"]
+                                }
+                            ]
+                        }, (oSlackError, oSlackResponse) => {});
+                        return;
+                    }
+
+                    const aStdError = Object.values(oResults)
+                                            .filter(oResult => oResult.stderr && oResult.stderr.length > 0)
+                                            .map(oResult => `$ ${oResult.command}\n${oResult.stdout.trim()}\n${oResult.stderr.trim()}`);
+
+                    oLogger.d('complete', {commit: oBody.head_commit.id, build: JSON.stringify(oResults)});
+
+                    let aAttachments = [
+                        {
+                            fallback:    `${CONFIG.uri.domain}: I finished a Build for repo ${sRepo}, commits ${sCompare} by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
+                            title:       `Build Complete`,
+                            title_link:  oBody.compare,
+                            color:       'good',
+                            text:        `${CONFIG.uri.domain} - ${sRepo} - ${sCompare}`,
+                        }
+                    ];
+
+                    if (aStdError && aStdError.length > 0) {
+                        aAttachments[0].title = "Build Complete, with stderr output";
+                        aAttachments[0].color = 'warning';
+                        aAttachments.push(
+                            {
+                                text:  "```" + aStdError.join('\n') + "```"
+                            }
+                        )
+                    }
+
+                    oSlack.webhook({
+                        attachments: aAttachments
+                    }, (err, response) => {});
+
+                    oLogger.d('notified');
+                    oLogger.summary();
+                });
             });
+
+            oResponse.writeHead(202, {'Content-Type': 'text/plain'});
+            oResponse.end();
         } else if (oHeaders && oHeaders['x-github-event'] === 'ping') {
-            GithookLogger.i('githook.build.request.ping', {method: sMethod, url: sUrl});
+            oLogger.i('request.ping', {method: sMethod, url: sUrl});
+
+            oResponse.writeHead(202, {'Content-Type': 'text/plain'});
+            oResponse.end();
+
+            oLogger.summary();
         } else if (sUrl === '/') {
             oResponse.writeHead(200, {'Content-Type': 'text/plain'});
             oResponse.write('ARRRG');
             oResponse.end();
-            return;
+
+            oLogger.summary();
         } else {
-            GithookLogger.w('githook.build.request.weird', {method: sMethod, url: sUrl});
+            oResponse.writeHead(202, {'Content-Type': 'text/plain'});
+            oResponse.end();
+
+            oLogger.w('request.weird', {method: sMethod, url: sUrl});
+            oLogger.summary();
         }
 
-        oResponse.writeHead(202, {'Content-Type': 'text/plain'});
-        oResponse.end();
     };
 
-    const config = function() {
-        BUILDS = {};
-        Object.keys(CONFIG.github.sources).forEach(sApp => {
-            let oBuild = {
-                app:  sApp,
-                path: CONFIG.path.install[sApp]
-            };
+    const config = fConfigured => {
+        async.parallel([
+            fCallback => {
+                BUILDS = {};
 
-            if (oBuild.path) {
-                const aSource     = CONFIG.github.sources[sApp].split('#');
-                oBuild.repository = aSource[0];
-                oBuild.branch     = `refs/heads/${aSource.length > 1 && aSource[1] && aSource[1].length ? aSource[1] : 'master'}`;
+                Object.keys(CONFIG.github.sources).forEach(sApp => {
+                    let oBuild = {
+                        app:  sApp
+                    };
 
-                BUILDS[oBuild.repository] = oBuild
+                    const aParsed = CONFIG.github.sources[sApp].match(/([^\/]+)\/([^#]+)(#(.+))?/);
+                    if (aParsed) {
+                        const sOwner  = aParsed[1];
+                        const sRepo   = aParsed[2];
+                        const sBranch = aParsed[4];
+                        const sPath   = path.join(CONFIG.path.build, sRepo);
+
+                        oBuild.repository = `${sOwner}/${sRepo}`;
+                        oBuild.branch     = sBranch ? sBranch : 'master';
+                        oBuild.branch_ref = `refs/heads/${sBranch ? sBranch : 'master'}`;
+                        oBuild.path       = sPath;
+
+                        BUILDS[oBuild.repository] = oBuild
+                    }
+                });
+
+                fCallback();
+            },
+            fCallback => {
+                const sMessage = `Hello ${CONFIG.uri.domain}! I'm here and waiting for github updates. to\n * ${Object.values(CONFIG.github.sources).join("\n * ")}`;
+                oSlack.setWebhook(CONFIG.slack.webhook.githook);
+                oSlack.webhook({
+                    text: sMessage
+                }, (err, response) => {
+                    GithookLogger.d('slack.greeted', {slack: CONFIG.slack.webhook.githook, message: sMessage});
+                    fCallback();
+                });
+            },
+            fCallback => {
+                fs.access(CONFIG.path.cache, fs.constants.W_OK, oError => {
+                    if (oError) {
+                        fs.mkdir(CONFIG.path.cache, 0o777, fCallback)
+                    } else {
+                        fCallback()
+                    }
+                });
+            }
+        ], () => {
+            AWS_PS.setRegion(CONFIG.aws.region);
+
+            S3 = new AWS.S3({
+                region: CONFIG.aws.region
+            });
+
+            GithookLogger.n('configured');
+
+            initOnce();
+
+            if (typeof fConfigured === 'function') {
+                fConfigured();
             }
         });
-
-        const sMessage = `Hello ${CONFIG.uri.domain}! I'm here and waiting for github updates. to\n * ${Object.values(CONFIG.github.sources).join("\n * ")}`;
-        oSlack.setWebhook(CONFIG.slack.webhook.githook);
-        oSlack.webhook({
-            text: sMessage
-        }, (err, response) => {
-            GithookLogger.d('githook.slack.greeted', {message: sMessage});
-        });
-
-        GithookLogger.n('githook.configured');
     };
 
     let bInitOnce = false;
 
-    const init = function() {
+    const initOnce = () => {
         if (bInitOnce) {
             return;
         }
 
         bInitOnce = true;
 
-        config();
         http.createServer(handleHTTPRequest).listen(CONFIG.server.port);
-        GithookLogger.n('githook.init');
+
+        GithookLogger.summary('Init');
     };
