@@ -4,6 +4,7 @@
     const path     = require('path');
     const http     = require('http');
     const AWS      = require('aws-sdk');
+    const consul   = require('consul')();
     const AWS_PS   = require('aws-parameter-store').default;
     const exec     = require('child_process').exec;
     const crypto   = require('crypto');
@@ -200,6 +201,15 @@
                     }, (oError, oResponse) => {
                         oLogger.dt(oTimer, {url: sReleaseURI});
                         fCallback(oError, oResponse);
+                    });
+                }];
+
+                oActions.consul = ['upload', (_, fCallback) => {
+                    const oTimer = oLogger.startTimer('consul');
+
+                    consul.kv.set(`/${oBuild.app}/release`, oBody.head_commit.id, (oError, oResult) => {
+                        oLogger.dt(oTimer);
+                        fCallback(oError, oResult);
                     });
                 }];
 
