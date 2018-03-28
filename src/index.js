@@ -185,9 +185,22 @@
                     reset:                       cb  => TimedCommand('reset',     `cd ${oBuild.path} && git reset --hard HEAD --quiet`,             cb),
                     checkout:  ['reset',     (_, cb) => TimedCommand('checkout',  `cd ${oBuild.path} && git checkout ${oBuild.branch} --quiet`,     cb)],
                     pull:      ['checkout',  (_, cb) => TimedCommand('pull',      `cd ${oBuild.path} && git pull --quiet`,                          cb)],
-                    make:      ['pull',      (_, cb) => TimedCommand('make',      `cd ${oBuild.path} && make githook`,                              cb)],
-                    tar:       ['make',      (_, cb) => TimedCommand('tar',       `tar --exclude=${sFile} -czf ${sOutputFile} -C ${oBuild.path} .`, cb)]
                 };
+
+                oActions.make   = ['pull', (_, fCallback) => {
+                    TimedCommand('make', `cd ${oBuild.path} && make githook`, (oError, oResult) => {
+                        if (oResult.stderr && oResult.stderr.length > 0) {
+                            const aStdErr = oResult.stderr.split('\n');
+                            if (aStdErr.length > 0) {
+                                oResult.stderr = aStdErr.filter(sError => sError.strpos('peer dependency') === -1);  // Yarn adds peer dependency warnings to stderr for some stupid reason - even in silent mode
+                            }
+                        }
+
+                        fCallback(oError, oResult);
+                    })
+                }];
+
+                oActions.tar    = ['make', (_, fCallback) => TimedCommand('tar', `tar --exclude=${sFile} -czf ${sOutputFile} -C ${oBuild.path} .`, fCallback)];
 
                 oActions.upload = ['tar',  (_, fCallback) => {
                     const oTimer = oLogger.startTimer('upload');
