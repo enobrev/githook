@@ -1,16 +1,17 @@
 "use strict";
 
-    const fs       = require('fs');
-    const path     = require('path');
-    const http     = require('http');
-    const AWS      = require('aws-sdk');
-    const consul   = require('consul')();
-    const AWS_PS   = require('aws-parameter-store').default;
-    const exec     = require('child_process').exec;
-    const crypto   = require('crypto');
-    const async    = require('async');
-    const Slack    = require('slack-node');
-    const {Logger} = require('winston-rsyslog-cee');
+    const fs         = require('fs');
+    const path       = require('path');
+    const http       = require('http');
+    const AWS        = require('aws-sdk');
+    const consul     = require('consul')();
+    const AWS_PS     = require('aws-parameter-store').default;
+    const exec       = require('child_process').exec;
+    const dateFormat = require('date-fns/format');
+    const crypto     = require('crypto');
+    const async      = require('async');
+    const Slack      = require('slack-node');
+    const {Logger}   = require('winston-rsyslog-cee');
 
     const sConfigPath = '/etc/welco/config.githook.json';
 
@@ -232,6 +233,9 @@
                         fCallback(oError, oResponse);
                     });
                 }];
+
+                oActions.tag  = ['upload', (_, cb) => TimedCommand('tag',  `cd ${oBuild.path} && git tag build-${dateFormat(new Date(), 'YYYY-MM-DD_HH-mm-ss')}`, cb)];
+                oActions.push = ['tag',    (_, cb) => TimedCommand('push', `cd ${oBuild.path} && git push --tags`,                                                cb)];
 
                 async.auto(oActions, (oError, oResults) => {
                     if (oError) {
