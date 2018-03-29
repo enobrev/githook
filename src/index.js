@@ -247,7 +247,7 @@
                                     author_link: oBody.sender.html_url,
                                     author_icon: oBody.sender.avatar_url,
                                     color:       'danger',
-                                    text:        `> ${oError.message}`,
+                                    text:        "```" + oError.message + "```",
                                     mrkdwn_in:   ["text"]
                                 }
                             ]
