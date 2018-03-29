@@ -234,8 +234,10 @@
                     });
                 }];
 
-                oActions.tag  = ['upload', (_, cb) => TimedCommand('tag',  `cd ${oBuild.path} && git tag build-${dateFormat(new Date(), 'YYYY-MM-DD_HH-mm-ss')}`, cb)];
-                oActions.push = ['tag',    (_, cb) => TimedCommand('push', `cd ${oBuild.path} && git push --tags`,                                                cb)];
+                const sTag = `build-${dateFormat(new Date(), 'YYYY-MM-DD_HH-mm-ss')}`;
+
+                oActions.tag  = ['upload', (_, cb) => TimedCommand('tag',  `cd ${oBuild.path} && git tag ${sTag}`,          cb)];
+                oActions.push = ['tag',    (_, cb) => TimedCommand('push', `cd ${oBuild.path} && git push --tags --silent`, cb)];
 
                 async.auto(oActions, (oError, oResults) => {
                     if (oError) {
@@ -271,7 +273,7 @@
                             title:       `Build Complete`,
                             title_link:  oBody.compare,
                             color:       'good',
-                            text:        `${CONFIG.uri.domain} - ${sRepo} - ${sCompare}`,
+                            text:        `${CONFIG.uri.domain} - ${sRepo} - ${sCompare} - ${sTag}`,
                         }
                     ];
 
