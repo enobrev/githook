@@ -236,8 +236,8 @@
 
                 const sTag = `build-${dateFormat(new Date(), 'YYYY-MM-DD_HH-mm-ss')}`;
 
-                oActions.tag  = ['upload', (_, cb) => TimedCommand('tag',  `cd ${oBuild.path} && git tag ${sTag}`,          cb)];
-                oActions.push = ['tag',    (_, cb) => TimedCommand('push', `cd ${oBuild.path} && git push --tags --silent`, cb)];
+                oActions.tag  = ['upload', (_, cb) => TimedCommand('tag',  `cd ${oBuild.path} && git tag ${sTag}`,         cb)];
+                oActions.push = ['tag',    (_, cb) => TimedCommand('push', `cd ${oBuild.path} && git push --tags --quiet`, cb)];
 
                 async.auto(oActions, (oError, oResults) => {
                     if (oError) {
