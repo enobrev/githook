@@ -173,6 +173,8 @@
                 const sOutputFile = path.join(CONFIG.path.cache, sFile);
                 const sReleaseKey = path.join(CONFIG.aws.path_release, oBuild.app, sFile);
                 const sReleaseURI = `https://${CONFIG.aws.hostname}/${CONFIG.aws.bucket_release}/${sReleaseKey}`;
+                const sTag        = `build-${dateFormat(new Date(), 'YYYY-MM-DD_HH-mm-ss')}`;
+                const sRelease    = `<${sReleaseURI}|${sTag}>`;
 
                 const TimedCommand = (sAction, sCommand, fCallback) => {
                     const oTimer = oLogger.startTimer(sAction);
@@ -234,7 +236,6 @@
                     });
                 }];
 
-                const sTag = `build-${dateFormat(new Date(), 'YYYY-MM-DD_HH-mm-ss')}`;
 
                 oActions.tag  = ['upload', (_, cb) => TimedCommand('tag',  `cd ${oBuild.path} && git tag ${sTag}`,         cb)];
                 oActions.push = ['tag',    (_, cb) => TimedCommand('push', `cd ${oBuild.path} && git push --tags --quiet`, cb)];
@@ -273,7 +274,7 @@
                             title:       `Build Complete`,
                             title_link:  oBody.compare,
                             color:       'good',
-                            text:        `${CONFIG.uri.domain} - ${sRepo} - ${sCompare} - ${sTag}`,
+                            text:        `${CONFIG.uri.domain} - ${sRepo} - ${sCompare} - ${sRelease}`,
                         }
                     ];
 
