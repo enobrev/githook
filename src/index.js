@@ -319,7 +319,43 @@
             oLogger.w('request.weird', {method: sMethod, url: sUrl});
             oLogger.summary();
         }
+    };
 
+    /*
+    This is not currently active.  The basic premise is to watch for the /instances key, which is
+    where all active instances post their most-recently installed version after a successful install.
+    This means we could potentially know when all instances have the most recent version
+     */
+    const watchInstanceVersions = () => {
+        const oWatch = consul.watch({method: consul.kv.get, options: {key: 'instances/', recurse: true}});
+
+        oWatch.on('change', (aData, oResponse) => {
+            if (!aData) {
+                return;
+            }
+
+            let aUpdate = [];
+
+            aData.forEach(oData => {
+                const aKey = oData.Key.match(/instances\/([^/]+)\/software\/(.+)/);
+
+                if (aKey) {
+                    aUpdate.push({
+                        instance: aKey[1],
+                        app:      aKey[2],
+                        release:  oData.Value
+                    });
+                }
+            });
+
+            if (aUpdate.length) {
+                console.log('WatchInstanceVersions/.Update', aUpdate);
+            }
+        });
+
+        oWatch.on('error', oError => {
+            console.log('WatchInstanceVersions.Error', oError);
+        });
     };
 
     const config = fConfigured => {
