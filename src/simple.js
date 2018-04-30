@@ -156,8 +156,8 @@
                         short: true
                     }
                 ];
-
-                const sCommand = `cd ${oBuild.path} && make githook`;
+                
+                const sCommand = `cd ${oBuild.path} && git reset --hard HEAD --quiet && git pull --quiet && make githook`;
 
                 GithookLogger.i('githook.build.command', {
                     command:    sCommand
