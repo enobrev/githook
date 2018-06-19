@@ -237,8 +237,8 @@
                 }];
 
 
-                oActions.tag  = ['upload', (_, cb) => TimedCommand('tag',  `cd ${oBuild.path} && git tag ${sTag}`,         cb)];
-                oActions.push = ['tag',    (_, cb) => TimedCommand('push', `cd ${oBuild.path} && git push --tags --quiet`, cb)];
+                oActions.tag  = ['upload', (_, cb) => TimedCommand('tag',  `cd ${oBuild.path} && git tag --force ${sTag} ${oBody.head_commit.id}`, cb)];
+                oActions.push = ['tag',    (_, cb) => TimedCommand('push', `cd ${oBuild.path} && git push --tags --quiet --force`, cb)];
 
                 async.auto(oActions, (oError, oResults) => {
                     if (oError) {
