@@ -11,7 +11,7 @@
     const crypto     = require('crypto');
     const async      = require('async');
     const Slack      = require('slack-node');
-    const {Logger}   = require('winston-rsyslog-cee');
+    const {Logger}   = require('rsyslog-cee');
 
     const sConfigPath = '/etc/welco/config.githook.json';
 

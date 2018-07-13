@@ -3,7 +3,7 @@
     const exec     = require('child_process').exec;
     const crypto   = require('crypto');
     const Slack    = require('slack-node');
-    const {Logger} = require('winston-rsyslog-cee');
+    const {Logger} = require('rsyslog-cee');
 
     const sConfigPath = process.env['CONFIG_FILE'];
 
