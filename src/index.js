@@ -1,24 +1,24 @@
 "use strict";
 
-    const fs         = require('fs');
-    const path       = require('path');
-    const http       = require('http');
-    const AWS        = require('aws-sdk');
-    const consul     = require('consul')();
-    const AWS_PS     = require('aws-parameter-store').default;
-    const exec       = require('child_process').exec;
-    const dateFormat = require('date-fns/format');
-    const crypto     = require('crypto');
-    const async      = require('async');
-    const Slack      = require('slack-node');
-    const {Logger}   = require('rsyslog-cee');
+    const fs                  = require('fs');
+    const path                = require('path');
+    const http                = require('http');
+    const AWS                 = require('aws-sdk');
+    const consul              = require('consul')();
+    const AWS_PS              = require('aws-parameter-store').default;
+    const exec                = require('child_process').exec;
+    const dateFormat          = require('date-fns/format');
+    const crypto              = require('crypto');
+    const async               = require('async');
+    const { IncomingWebhook } = require('@slack/client');
+    const { Logger }          = require('rsyslog-cee');
 
     const sConfigPath = '/etc/welco/config.githook.json';
 
     let CONFIG;
-    let oSlack = new Slack();
     let BUILDS = {};
     let S3;
+    let oSlack;
 
     const GithookLogger = new Logger({
         service: 'Githook',
@@ -148,7 +148,7 @@
                 const sCompareHashes = oBody.compare.split('/').pop();
                 const sCompare       = `<${oBody.compare}|${sCompareHashes}>`;
 
-                oSlack.webhook({
+                oSlack.send({
                     attachments: [
                         {
                             fallback:    `${CONFIG.uri.domain}: I started a Build for repo ${sRepo}, commit ${sCompare} by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
@@ -248,7 +248,7 @@
                     if (oError) {
                         oLogger.e('error', {output: oError, build: JSON.stringify(oResults)});
 
-                        oSlack.webhook({
+                        oSlack.send({
                             attachments: [
                                 {
                                     fallback:    `${CONFIG.uri.domain}: I failed a Build for repo ${sRepo}.\n>*Error:*\n> ${oError.message}`,
@@ -293,7 +293,7 @@
                         )
                     }
 
-                    oSlack.webhook({
+                    oSlack.send({
                         attachments: aAttachments
                     }, (err, response) => {});
 
@@ -392,10 +392,10 @@
             },
             fCallback => {
                 const sMessage = `Hello ${CONFIG.uri.domain}! I'm here and waiting for github updates. to\n * ${Object.values(CONFIG.github.sources).join("\n * ")}`;
-                oSlack.setWebhook(CONFIG.slack.webhook.githook);
-                oSlack.webhook({
+                oSlack = new IncomingWebhook(CONFIG.slack.webhook.githook);
+                oSlack.send({
                     text: sMessage
-                }, (err, response) => {
+                }, (oError, oResponse) => {
                     GithookLogger.d('slack.greeted', {slack: CONFIG.slack.webhook.githook, message: sMessage});
                     fCallback();
                 });
