@@ -188,11 +188,13 @@
 
 
                 const oActions = {
-                    clone:                       cb  => TimedCommand('clone',     `cd ${CONFIG.path.build} && git clone ${sSSHUrl} ${sBuildPath}`, cb),
-                    checkout:  ['clone',     (_, cb) => TimedCommand('checkout',  `cd ${sBuildPath} && git checkout ${oBody.head_commit.id}`,      cb)]
+                    prep:                        cb  => TimedCommand('prep',      `rm -rf ${sBuildPath}`,                                                  cb),
+                    clone:     ['prep',      (_, cb) => TimedCommand('clone',     `cd ${CONFIG.path.build} && git clone ${sSSHUrl} ${sBuildPath} --quiet`, cb)],
+                    checkout:  ['clone',     (_, cb) => TimedCommand('checkout',  `cd ${sBuildPath} && git checkout ${oBuild.branch} --quiet`,             cb)],
+                    reset:     ['checkout',  (_, cb) => TimedCommand('checkout',  `cd ${sBuildPath} && git reset --hard ${oBody.head_commit.id} --quiet`,  cb)]
                 };
 
-                oActions.make   = ['checkout', (_, fCallback) => {
+                oActions.make   = ['reset', (_, fCallback) => {
                     TimedCommand('make', `cd ${sBuildPath} && make githook`, (oError, oResult) => {
                         if (oResult.stderr && oResult.stderr.length > 0) {
                             oResult.stderr = oResult.stderr.split('\n').filter(sError => sError.indexOf('peer dependency') === -1).join("\n");  // Yarn adds peer dependency warnings to stderr for some incomprehensible reason - even in silent mode - see https://github.com/yarnpkg/yarn/issues/4064
