@@ -66,10 +66,10 @@
         let aBody    = [];
 
         if (oHeaders && oHeaders['x-github-event'] === 'push') {
-            oLogger.d('request', {delivery: oHeaders['x-github-delivery'], method: sMethod, url: sUrl});
+            oLogger.d('http_request', {delivery: oHeaders['x-github-delivery'], method: sMethod, url: sUrl});
 
             oRequest.on('error', oError => {
-                oLogger.e('request.error', {
+                oLogger.e('http_request.error', {
                     error: {
                         name:    oError.name,
                         message: oError.message
@@ -217,7 +217,7 @@
                         ACL:            'private',
                         ContentType:    'application/gzip'
                     }, (oError, oResponse) => {
-                        oLogger.dt(oTimer, {url: sReleaseURI});
+                        oLogger.dt(oTimer);
                         fCallback(oError, oResponse);
                     });
                 }];
@@ -249,7 +249,7 @@
 
                 async.auto(oActions, (oError, oResults) => {
                     if (oError) {
-                        oLogger.e('error', {output: oError, build: JSON.stringify(oResults)});
+                        oLogger.e('async', {error: oError, build: JSON.stringify(oResults)});
 
                         oSlack.send({
                             icon_emoji:  ":bangbang:",
