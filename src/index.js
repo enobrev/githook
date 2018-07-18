@@ -147,6 +147,7 @@
                 const sRepo          = `<${oBody.repository.html_url}|${oBody.repository.full_name}>`;
                 const sCompareHashes = oBody.compare.split('/').pop();
                 const sCompare       = `<${oBody.compare}|${sCompareHashes}>`;
+                const sLogs          = `<https://kibana.${CONFIG.uri.domain}/app/kibana#/discover?_g=(filters:!(),refreshInterval:(display:Off,pause:!f,value:0),time:(from:now-1h,mode:quick,to:now))&_a=(columns:!('--i',severity,'--action','--ms'),interval:auto,query:(language:lucene,query:'%5C-%5C-t:${oLogger.thread_hash}'),sort:!('--i',asc))|Kibana>`;
 
                 oSlack.send({
                     attachments: [
@@ -251,16 +252,18 @@
                         oLogger.e('error', {output: oError, build: JSON.stringify(oResults)});
 
                         oSlack.send({
+                            icon_emoji:  ":bangbang:",
                             attachments: [
                                 {
                                     fallback:    `${CONFIG.uri.domain}: I failed a Build for repo ${sRepo}.\n>*Error:*\n> ${oError.message}`,
-                                    title:       `<!here> ${CONFIG.uri.domain} - ${sRepo} - ${sCompareHashes} - Build Failed`,
-                                    title_link:  oBody.compare,
                                     author_name: oBody.sender.login,
                                     author_link: oBody.sender.html_url,
                                     author_icon: oBody.sender.avatar_url,
                                     color:       'danger',
-                                    icon_emoji:  ":bangbang:",
+                                    text:        `<!here> Build Failed: ${CONFIG.uri.domain} - ${sRepo} - ${sCompare} - ${sLogs}`,
+                                    mrkdwn_in:   ["text"]
+                                },
+                                {
                                     text:        "```" + oError.message + "```",
                                     mrkdwn_in:   ["text"]
                                 }
@@ -281,7 +284,7 @@
                             title:       `Build Complete`,
                             title_link:  oBody.compare,
                             color:       'good',
-                            text:        `${CONFIG.uri.domain} - ${sRepo} - ${sCompare} - ${sRelease}`,
+                            text:        `${CONFIG.uri.domain} - ${sRepo} - ${sCompare} - ${sRelease} - ${sLogs}`,
                         }
                     ];
 
