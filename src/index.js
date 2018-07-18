@@ -175,6 +175,8 @@
                 const sReleaseURI = `https://${CONFIG.aws.hostname}/${CONFIG.aws.bucket_release}/${sReleaseKey}`;
                 const sTag        = `build-${dateFormat(new Date(), 'YYYY-MM-DD_HH-mm-ss')}`;
                 const sRelease    = `<${sReleaseURI}|${sTag}>`;
+                const sSSHUrl     = oBuild.repository.ssh_url.replace('git@github.com', oBuild.ssh);
+                const sBuildPath  = path.join(CONFIG.path.build, oBody.head_commit.id);
 
                 const TimedCommand = (sAction, sCommand, fCallback) => {
                     const oTimer = oLogger.startTimer(sAction);
@@ -184,14 +186,14 @@
                     })
                 };
 
+
                 const oActions = {
-                    reset:                       cb  => TimedCommand('reset',     `cd ${oBuild.path} && git reset --hard HEAD --quiet`,             cb),
-                    checkout:  ['reset',     (_, cb) => TimedCommand('checkout',  `cd ${oBuild.path} && git checkout ${oBuild.branch} --quiet`,     cb)],
-                    pull:      ['checkout',  (_, cb) => TimedCommand('pull',      `cd ${oBuild.path} && git pull --quiet`,                          cb)],
+                    clone:                       cb  => TimedCommand('clone',     `cd ${CONFIG.path.build} && git clone ${sSSHUrl} ${sBuildPath}`, cb),
+                    checkout:  ['clone',     (_, cb) => TimedCommand('checkout',  `cd ${sBuildPath} && git checkout ${oBody.head_commit.id}`,      cb)]
                 };
 
-                oActions.make   = ['pull', (_, fCallback) => {
-                    TimedCommand('make', `cd ${oBuild.path} && make githook`, (oError, oResult) => {
+                oActions.make   = ['checkout', (_, fCallback) => {
+                    TimedCommand('make', `cd ${sBuildPath} && make githook`, (oError, oResult) => {
                         if (oResult.stderr && oResult.stderr.length > 0) {
                             oResult.stderr = oResult.stderr.split('\n').filter(sError => sError.indexOf('peer dependency') === -1).join("\n");  // Yarn adds peer dependency warnings to stderr for some incomprehensible reason - even in silent mode - see https://github.com/yarnpkg/yarn/issues/4064
                         }
@@ -200,7 +202,7 @@
                     })
                 }];
 
-                oActions.tar    = ['make', (_, fCallback) => TimedCommand('tar', `tar --exclude=${sFile} -czf ${sOutputFile} -C ${oBuild.path} .`, fCallback)];
+                oActions.tar    = ['make', (_, fCallback) => TimedCommand('tar', `tar --exclude=${sFile} -czf ${sOutputFile} -C ${sBuildPath} .`, fCallback)];
 
                 oActions.upload = ['tar',  (_, fCallback) => {
                     const oTimer = oLogger.startTimer('upload');
@@ -237,8 +239,10 @@
                 }];
 
 
-                oActions.tag  = ['upload', (_, cb) => TimedCommand('tag',  `cd ${oBuild.path} && git tag --force ${sTag} ${oBody.head_commit.id}`, cb)];
-                oActions.push = ['tag',    (_, cb) => TimedCommand('push', `cd ${oBuild.path} && git push --tags --quiet --force`, cb)];
+                oActions.cleanTmp = ['upload', (_, cb) => TimedCommand('cleanTmp',   `rm -rf ${sOutputFile}`,                                               cb)];
+                oActions.tag      = ['upload', (_, cb) => TimedCommand('tag',        `cd ${sBuildPath} && git tag --force ${sTag} ${oBody.head_commit.id}`, cb)];
+                oActions.push     = ['tag',    (_, cb) => TimedCommand('push',       `cd ${sBuildPath} && git push --tags --quiet --force`,                 cb)];
+                oActions.clean    = ['push',   (_, cb) => TimedCommand('cleanBuild', `rm -rf ${sBuildPath}`,                                                cb)];
 
                 async.auto(oActions, (oError, oResults) => {
                     if (oError) {
@@ -248,12 +252,13 @@
                             attachments: [
                                 {
                                     fallback:    `${CONFIG.uri.domain}: I failed a Build for repo ${sRepo}.\n>*Error:*\n> ${oError.message}`,
-                                    title:       `${CONFIG.uri.domain} - ${sRepo} - ${sCompareHashes} - Build Failed`,
+                                    title:       `<!here> ${CONFIG.uri.domain} - ${sRepo} - ${sCompareHashes} - Build Failed`,
                                     title_link:  oBody.compare,
                                     author_name: oBody.sender.login,
                                     author_link: oBody.sender.html_url,
                                     author_icon: oBody.sender.avatar_url,
                                     color:       'danger',
+                                    icon_emoji:  ":bangbang:",
                                     text:        "```" + oError.message + "```",
                                     mrkdwn_in:   ["text"]
                                 }
@@ -373,12 +378,11 @@
                         const sOwner  = aParsed[1];
                         const sRepo   = aParsed[2];
                         const sBranch = aParsed[4];
-                        const sPath   = path.join(CONFIG.path.build, sRepo);
 
                         oBuild.repository = `${sOwner}/${sRepo}`;
                         oBuild.branch     = sBranch ? sBranch : 'master';
                         oBuild.branch_ref = `refs/heads/${sBranch ? sBranch : 'master'}`;
-                        oBuild.path       = sPath;
+                        oBuild.ssh        = CONFIG.github.ssh[sApp];
 
                         BUILDS[oBuild.repository] = oBuild
                     }
