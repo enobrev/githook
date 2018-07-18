@@ -175,7 +175,7 @@
                 const sReleaseURI = `https://${CONFIG.aws.hostname}/${CONFIG.aws.bucket_release}/${sReleaseKey}`;
                 const sTag        = `build-${dateFormat(new Date(), 'YYYY-MM-DD_HH-mm-ss')}`;
                 const sRelease    = `<${sReleaseURI}|${sTag}>`;
-                const sSSHUrl     = oBuild.repository.ssh_url.replace('git@github.com', oBuild.ssh);
+                const sSSHUrl     = oBody.repository.ssh_url.replace('git@github.com', oBuild.ssh);
                 const sBuildPath  = path.join(CONFIG.path.build, oBody.head_commit.id);
 
                 const TimedCommand = (sAction, sCommand, fCallback) => {
