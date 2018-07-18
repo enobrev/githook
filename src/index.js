@@ -10,7 +10,9 @@
     const dateFormat          = require('date-fns/format');
     const crypto              = require('crypto');
     const async               = require('async');
-    const { IncomingWebhook } = require('@slack/client');
+    const { WebClient,
+            RTMClient,
+            LogLevel }        = require('@slack/client');
     const { Logger }          = require('rsyslog-cee');
 
     const sConfigPath = '/etc/welco/config.githook.json';
@@ -18,12 +20,127 @@
     let CONFIG;
     let BUILDS = {};
     let S3;
-    let oSlack;
+    let CHANNEL;
+    let LOGS = [];
 
     const GithookLogger = new Logger({
         service: 'Githook',
         console: false,
         syslog:  true
+    });
+
+    const BOT_TOKEN = 'xoxb-16630731827-400248805764-7j9dum5WWjoMwkXGeAibeEnJ';
+    const Slack_Web = new WebClient(BOT_TOKEN);
+    const Slack_RTM = new RTMClient(BOT_TOKEN, {
+        logLevel: LogLevel.INFO,
+        logger: (iLevel, sMessage) => {
+            switch(iLevel) {
+                case LogLevel.DEBUG:  GithookLogger.d('Slack.RTM', {message: sMessage}); break;
+                case LogLevel.INFO:   GithookLogger.i('Slack.RTM', {message: sMessage}); break;
+                case LogLevel.WARN:   GithookLogger.w('Slack.RTM', {message: sMessage}); break;
+                case LogLevel.ERROR:  GithookLogger.e('Slack.RTM', {message: sMessage}); break;
+
+            }
+        }
+    });
+
+    Slack_RTM.start({no_latest: true});
+
+
+    Slack_RTM.on('message', oMessage => {
+        if ( oMessage.subtype && oMessage.subtype === 'bot_message') {
+            return ;
+        }
+
+        if (!oMessage.subtype && oMessage.user === Slack_RTM.activeUserId) {
+            return;
+        }
+
+        if (!oMessage.text) {
+            return;
+        }
+
+        let rDirectMention = new RegExp('^\<\@' + Slack_RTM.activeUserId + '\>', 'i');
+
+        if (oMessage.text.match(rDirectMention)) {
+            oMessage.text = oMessage.text.replace(rDirectMention, '')
+                                         .replace(/^:\s+/, '')
+                                         .trim()
+                                         .toLowerCase();
+
+            switch(true) {
+                case oMessage.text.indexOf('recent builds') > -1:
+                    console.log('Show Recent Builds', oMessage);
+                    if (LOGS.length === 0) {
+
+                        Slack_Web.chat.postMessage({
+                            channel: oMessage.channel,
+                            as_user: true,
+                            text:    'No Builds since I last started'
+                        });
+                    } else {
+                        const aCommits = LOGS.map(oLog => oLog.commit);
+
+                        Slack_Web.chat.postMessage({
+                            channel: oMessage.channel,
+                            as_user: true,
+                            text:    aCommits.join("\n")
+                        });
+                    }
+                    break;
+
+                case oMessage.text.indexOf('last build') > -1 && oMessage.text.indexOf('log') > -1:
+                    console.log('Show Last Build Log', oMessage);
+                    if (LOGS.length === 0) {
+                        Slack_Web.chat.postMessage({
+                            channel: oMessage.channel,
+                            as_user: true,
+                            text:    'No Builds since I last started'
+                        });
+                    } else {
+                        let oLog = LOGS[LOGS.length - 1];
+                        Slack_Web.files.upload({
+                            channels: oMessage.channel,
+                            content:  JSON.stringify(oLog, null, '    '),
+                            filename: `${oLog.commit}.json`,
+                            filetype: 'json',
+                            title:    `Githook build log for commit ${oLog.commit}`
+                        });
+                    }
+                    break;
+
+                case oMessage.text.indexOf('last build') > -1:
+                    console.log('Show Last Build', oMessage);
+                    if (LOGS.length === 0) {
+                        Slack_Web.chat.postMessage({
+                            channel: oMessage.channel,
+                            as_user: true,
+                            text:    'No Builds since I last started'
+                        });
+                    } else {
+                        let oLog = LOGS[LOGS.length - 1];
+                        Slack_Web.chat.postMessage({
+                            channel: oMessage.channel,
+                            as_user: true,
+                            text:    oLog.commit
+                        });
+                    }
+                    break;
+
+                case oMessage.text.indexOf('branches') > -1:
+                    console.log('Show Branches', oMessage);
+
+                    Slack_Web.chat.postMessage({
+                        channel:    oMessage.channel,
+                        as_user:    true,
+                        // thread_ts:  oMessage.thread_ts ? oMessage.thread_ts : oMessage.ts,
+                        text:       `${Object.values(CONFIG.github.sources).join("\n")}`
+                    });
+                break;
+            }
+        }
+
+        return false;
     });
 
     const loadConfig = () => {
@@ -148,7 +265,8 @@
                 const sCompareHashes = oBody.compare.split('/').pop();
                 const sCompare       = `<${oBody.compare}|${sCompareHashes}>`;
 
-                oSlack.send({
+                Slack_Web.chat.postMessage({
+                    channel: CHANNEL.id,
                     attachments: [
                         {
                             fallback:    `${CONFIG.uri.domain}: I started a Build for repo ${sRepo}, commit ${sCompare} by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
@@ -175,7 +293,7 @@
                 const sReleaseURI = `https://${CONFIG.aws.hostname}/${CONFIG.aws.bucket_release}/${sReleaseKey}`;
                 const sTag        = `build-${dateFormat(new Date(), 'YYYY-MM-DD_HH-mm-ss')}`;
                 const sRelease    = `<${sReleaseURI}|${sTag}>`;
-                const sSSHUrl     = oBuild.repository.ssh_url.replace('git@github.com', oBuild.ssh);
+                const sSSHUrl     = oBody.repository.ssh_url.replace('git@github.com', oBuild.ssh);
                 const sBuildPath  = path.join(CONFIG.path.build, oBody.head_commit.id);
 
                 const TimedCommand = (sAction, sCommand, fCallback) => {
@@ -188,8 +306,9 @@
 
 
                 const oActions = {
-                    clone:                       cb  => TimedCommand('clone',     `cd ${CONFIG.path.build} && git clone ${sSSHUrl} ${sBuildPath}`, cb),
-                    checkout:  ['clone',     (_, cb) => TimedCommand('checkout',  `cd ${sBuildPath} && git checkout ${oBody.head_commit.id}`,      cb)]
+                    clone:                       cb  => TimedCommand('clone',     `cd ${CONFIG.path.build} && git clone ${sSSHUrl} ${sBuildPath} --quiet`, cb),
+                    checkout:  ['clone',     (_, cb) => TimedCommand('checkout',  `cd ${sBuildPath} && git checkout ${oBuild.branch} --quiet`,             cb)],
+                    reset:     ['checkout',  (_, cb) => TimedCommand('reset',     `cd ${sBuildPath} && git reset --hard ${oBody.head_commit.id} --quiet`,  cb)]
                 };
 
                 oActions.make   = ['checkout', (_, fCallback) => {
@@ -245,10 +364,19 @@
                 oActions.clean    = ['push',   (_, cb) => TimedCommand('cleanBuild', `rm -rf ${sBuildPath}`,                                                cb)];
 
                 async.auto(oActions, (oError, oResults) => {
+                    LOGS.push({
+                        commit:  oBody.head_commit.id,
+                        error:   oError,
+                        results: oResults
+                    });
+
                     if (oError) {
                         oLogger.e('error', {output: oError, build: JSON.stringify(oResults)});
 
-                        oSlack.send({
+                        Slack_Web.chat.postMessage({
+                            channel:    CHANNEL.id,
+                            icon_emoji: ":bangbang:",
+                            as_user:    false,
                             attachments: [
                                 {
                                     fallback:    `${CONFIG.uri.domain}: I failed a Build for repo ${sRepo}.\n>*Error:*\n> ${oError.message}`,
@@ -258,7 +386,6 @@
                                     author_link: oBody.sender.html_url,
                                     author_icon: oBody.sender.avatar_url,
                                     color:       'danger',
-                                    icon_emoji:  ":bangbang:",
                                     text:        "```" + oError.message + "```",
                                     mrkdwn_in:   ["text"]
                                 }
@@ -293,7 +420,9 @@
                         )
                     }
 
-                    oSlack.send({
+                    Slack_Web.chat.postMessage({
+                        channel:     CHANNEL.id,
+                        as_user:     true,
                         attachments: aAttachments
                     }, (err, response) => {});
 
@@ -391,13 +520,31 @@
                 fCallback();
             },
             fCallback => {
-                const sMessage = `Hello ${CONFIG.uri.domain}! I'm here and waiting for github updates. to\n * ${Object.values(CONFIG.github.sources).join("\n * ")}`;
-                oSlack = new IncomingWebhook(CONFIG.slack.webhook.githook);
-                oSlack.send({
-                    text: sMessage
-                }, (oError, oResponse) => {
-                    GithookLogger.d('slack.greeted', {slack: CONFIG.slack.webhook.githook, message: sMessage});
-                    fCallback();
+                const sMessage = `Hello ${CONFIG.uri.domain}! I'm here and waiting for github updates.`;
+
+                Slack_Web.channels.list().then(oResponse => {
+                    const oChannel = oResponse.channels.find(oChannel => oChannel.is_member);
+                    if (oChannel) {
+                        CHANNEL = oChannel;
+
+                        Slack_Web.chat.postMessage({
+                            channel: CHANNEL.id,
+                            as_user: true,
+                            text:    sMessage
+                        }).then(oResponse => {
+                            GithookLogger.d('slack.greeted', {channel: CHANNEL.id, message: sMessage});
+                            fCallback();
+                        }).catch(oError => {
+                            GithookLogger.e('slack.greeting.error', {channel: CHANNEL.id, message: sMessage, error: oError});
+                            fCallback(oError);
+                        });
+                    } else {
+                        GithookLogger.e('slack.channels.no_channel');
+                        fCallback(oError);
+                    }
+                }).catch(oError => {
+                    console.error(oError);
+                    GithookLogger.e('slack.channels.error', {error: oError});
                 });
             },
             fCallback => {
