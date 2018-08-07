@@ -192,7 +192,7 @@
                     prep:                        cb  => TimedCommand('prep',      `rm -rf ${sBuildPath}`,                                                  cb),
                     clone:     ['prep',      (_, cb) => TimedCommand('clone',     `cd ${CONFIG.path.build} && git clone ${sSSHUrl} ${sBuildPath} --quiet`, cb)],
                     checkout:  ['clone',     (_, cb) => TimedCommand('checkout',  `cd ${sBuildPath} && git checkout ${oBuild.branch} --quiet`,             cb)],
-                    reset:     ['checkout',  (_, cb) => TimedCommand('checkout',  `cd ${sBuildPath} && git reset --hard ${oBody.head_commit.id} --quiet`,  cb)]
+                    reset:     ['checkout',  (_, cb) => TimedCommand('reset',     `cd ${sBuildPath} && git reset --hard ${oBody.head_commit.id} --quiet`,  cb)]
                 };
 
                 oActions.make   = ['reset', (_, fCallback) => {
