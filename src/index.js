@@ -69,6 +69,9 @@
             oLogger.d('http_request', {delivery: oHeaders['x-github-delivery'], method: sMethod, url: sUrl});
 
             oRequest.on('error', oError => {
+                oResponse.writeHead(500, {'Content-Type': 'text/plain'});
+                oResponse.end();
+
                 oLogger.e('http_request.error', {
                     error: {
                         name:    oError.name,
@@ -82,6 +85,10 @@
             });
 
             oRequest.on('end', () => {
+
+                oResponse.writeHead(202, {'Content-Type': 'text/plain'});
+                oResponse.end();
+
                 let oBody;
                 try {
                     const sBody = Buffer.concat(aBody).toString();
@@ -306,9 +313,6 @@
                     oLogger.summary();
                 });
             });
-
-            oResponse.writeHead(202, {'Content-Type': 'text/plain'});
-            oResponse.end();
         } else if (oHeaders && oHeaders['x-github-event'] === 'ping') {
             oLogger.i('request.ping', {method: sMethod, url: sUrl});
 
