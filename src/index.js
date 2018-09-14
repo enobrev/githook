@@ -109,7 +109,7 @@
                         repository: oBody.repository.full_name,
                         commit:     oBody.head_commit.id,
                         message:    oBody.head_commit.message,
-                        body:       oBody
+                        body:       JSON.encode(oBody)
                     });
                 } catch (e) {
                     oLogger.w('start', {
