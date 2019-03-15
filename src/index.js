@@ -271,7 +271,7 @@
                                     mrkdwn_in:   ["text"]
                                 },
                                 {
-                                    text:        "```" + oError.message + "```",
+                                    text:        "```\n" + oError.message + "\n```",
                                     mrkdwn_in:   ["text"]
                                 }
                             ]
@@ -300,7 +300,7 @@
                         aAttachments[0].color = 'warning';
                         aAttachments.push(
                             {
-                                text:  "```" + aStdError.join('\n') + "```"
+                                text:  "```\n" + aStdError.join('\n') + "\n```"
                             }
                         )
                     }
