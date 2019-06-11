@@ -29,10 +29,10 @@
     const loadConfig = () => {
         fs.access(sConfigPath, fs.constants.R_OK, oError => {
             if (oError) {
-                GithookLogger.w('config.not_available');
+                GithookLogger.w('Githook.config.not_available');
                 setTimeout(loadConfig, 1000);
             } else {
-                GithookLogger.d('config.ready');
+                GithookLogger.d('Githook.config.ready');
                 CONFIG = require(sConfigPath);
                 config();
             }
@@ -42,7 +42,7 @@
     loadConfig();
 
     process.on('SIGHUP', () => {
-        GithookLogger.d('config.sighup.reload');
+        GithookLogger.d('Githook.config.sighup.reload');
         delete require.cache[sConfigPath];
         config();
     });
@@ -66,13 +66,13 @@
         let aBody    = [];
 
         if (oHeaders && oHeaders['x-github-event'] === 'push') {
-            oLogger.d('http_request', {delivery: oHeaders['x-github-delivery'], method: sMethod, url: sUrl});
+            oLogger.d('Githook.http_request', {delivery: oHeaders['x-github-delivery'], method: sMethod, url: sUrl});
 
             oRequest.on('error', oError => {
                 oResponse.writeHead(500, {'Content-Type': 'text/plain'});
                 oResponse.end();
 
-                oLogger.e('http_request.error', {
+                oLogger.e('Githook.http_request.error', {
                     error: {
                         name:    oError.name,
                         message: oError.message
@@ -97,22 +97,19 @@
                         const sSigned = 'sha1=' + crypto.createHmac('sha1', CONFIG.github.secret).update(sBody).digest('hex');
 
                         if (sSigned !== oHeaders['x-hub-signature']) {
-                            oLogger.e('signature.mismatch');
+                            oLogger.e('Githook.signature.mismatch');
                             return;
                         }
                     }
 
                     oBody = JSON.parse(sBody);
 
-                    oLogger.i('ready', {
-                        sender:     oBody.sender.login,
+                    oLogger.i('Githook.ready', {
                         repository: oBody.repository.full_name,
-                        commit:     oBody.head_commit.id,
-                        message:    oBody.head_commit.message,
-                        body:       JSON.stringify(oBody)
+                        commit:     oBody.head_commit.id
                     });
                 } catch (e) {
-                    oLogger.w('start', {
+                    oLogger.w('Githook.start', {
                         error:      {
                             name:    e.name,
                             message: e.message
@@ -127,7 +124,7 @@
                 const oBuild = BUILDS[oBody.repository.full_name];
 
                 if (!oBuild) {
-                    oLogger.w('repository.not_defined', {
+                    oLogger.w('Githook.repository.not_defined', {
                         repository: oBody.repository.full_name,
                     });
 
@@ -135,7 +132,7 @@
                 }
 
                 if (oBuild.branch_ref !== oBody.ref) {
-                    oLogger.d('repository.mismatched_branch', {
+                    oLogger.d('Githook.repository.mismatched_branch', {
                         repository: oBody.repository.full_name,
                         branch: {
                             commit: oBody.ref,
@@ -146,8 +143,8 @@
                     return;
                 }
 
-                oLogger.i('matched', {
-                    build:   oBuild
+                oLogger.i('Githook.matched', {
+                    build: JSON.stringify(oBuild)
                 });
 
                 const aMessage       = oBody.commits.map(oCommit => `<${oCommit.url}|${oCommit.id.substring(0, 6)}>: ${oCommit.message}`);
@@ -215,7 +212,7 @@
                 oActions.tar    = ['make', (_, fCallback) => TimedCommand('tar', `tar --exclude=${sFile} -czf ${sOutputFile} -C ${sBuildPath} .`, fCallback)];
 
                 oActions.upload = ['tar',  (_, fCallback) => {
-                    const oTimer = oLogger.startTimer('upload');
+                    const oTimer = oLogger.startTimer('Githook.upload');
 
                     S3.upload({
                         Bucket:         CONFIG.aws.bucket_release,
@@ -230,7 +227,7 @@
                 }];
 
                 oActions.consul = ['upload', (_, fCallback) => {
-                    const oTimer = oLogger.startTimer('consul');
+                    const oTimer = oLogger.startTimer('Githook.consul');
 
                     consul.kv.set(`${oBuild.app}/release`, oBody.head_commit.id, (oError, oResult) => {
                         oLogger.dt(oTimer);
@@ -239,7 +236,7 @@
                 }];
 
                 oActions.parameter_store = ['upload', (_, fCallback) => {
-                    const oTimer     = oLogger.startTimer('parameter_store');
+                    const oTimer     = oLogger.startTimer('Githook.parameter_store');
                     const bOverwrite = true;
 
                     AWS_PS.put(`/${CONFIG.environment}/${oBuild.app}/release`, oBody.head_commit.id, AWS_PS.TYPE_STRING, bOverwrite, (oError, oResponse) => {
@@ -256,7 +253,7 @@
 
                 async.auto(oActions, (oError, oResults) => {
                     if (oError) {
-                        oLogger.e('async', {error: oError, build: JSON.stringify(oResults)});
+                        oLogger.e('Githook.async', {error: oError, build: JSON.stringify(oResults)});
 
                         oSlack.send({
                             icon_emoji:  ":bangbang:",
@@ -283,7 +280,7 @@
                                             .filter(oResult => oResult.stderr && oResult.stderr.length > 0)
                                             .map(oResult => `$ ${oResult.command}\n${oResult.stdout.trim()}\n${oResult.stderr.trim()}`);
 
-                    oLogger.d('complete', {commit: oBody.head_commit.id, build: JSON.stringify(oResults)});
+                    oLogger.d('Githook.complete', {commit: oBody.head_commit.id, build: JSON.stringify(oResults)});
 
                     let aAttachments = [
                         {
@@ -309,12 +306,12 @@
                         attachments: aAttachments
                     }, (err, response) => {});
 
-                    oLogger.d('notified');
+                    oLogger.d('Githook.notified');
                     oLogger.summary();
                 });
             });
         } else if (oHeaders && oHeaders['x-github-event'] === 'ping') {
-            oLogger.i('request.ping', {method: sMethod, url: sUrl});
+            oLogger.i('Githook.request.ping', {method: sMethod, url: sUrl});
 
             oResponse.writeHead(202, {'Content-Type': 'text/plain'});
             oResponse.end();
@@ -330,7 +327,7 @@
             oResponse.writeHead(202, {'Content-Type': 'text/plain'});
             oResponse.end();
 
-            oLogger.w('request.weird', {method: sMethod, url: sUrl});
+            oLogger.w('Githook.request.weird', {method: sMethod, url: sUrl});
             oLogger.summary();
         }
     };
@@ -405,7 +402,7 @@
                 oSlack.send({
                     text: sMessage
                 }, (oError, oResponse) => {
-                    GithookLogger.d('slack.greeted', {slack: CONFIG.slack.webhook.githook, message: sMessage});
+                    GithookLogger.d('Githook.slack.greeted', {slack: CONFIG.slack.webhook.githook, message: sMessage});
                     fCallback();
                 });
             },
@@ -425,7 +422,7 @@
                 region: CONFIG.aws.region
             });
 
-            GithookLogger.n('configured');
+            GithookLogger.n('Githook.configured');
 
             initOnce();
 
@@ -446,5 +443,5 @@
 
         http.createServer(handleHTTPRequest).listen(CONFIG.server.port);
 
-        GithookLogger.summary('Init');
+        GithookLogger.summary('Githook.Init');
     };
