@@ -10,8 +10,10 @@
     const dateFormat          = require('date-fns/format');
     const crypto              = require('crypto');
     const async               = require('async');
-    const { IncomingWebhook } = require('@slack/client');
+    const { IncomingWebhook } = require('@slack/webhook');
     const { Logger }          = require('rsyslog-cee');
+
+    const fsPromises  = fs.promises;
 
     const sConfigPath = '/etc/welco/config.githook.json';
 
@@ -26,17 +28,16 @@
         syslog:  true
     });
 
-    const loadConfig = () => {
-        fs.access(sConfigPath, fs.constants.R_OK, oError => {
-            if (oError) {
-                GithookLogger.w('Githook.config.not_available');
-                setTimeout(loadConfig, 1000);
-            } else {
-                GithookLogger.d('Githook.config.ready');
-                CONFIG = require(sConfigPath);
-                config();
-            }
-        });
+    const loadConfig = async () => {
+        try {
+            await fsPromises.access(sConfigPath, fs.constants.R_OK);
+            GithookLogger.d('Githook.config.ready');
+            CONFIG = require(sConfigPath);
+            config();
+        } catch (oError) {
+            GithookLogger.w('Githook.config.not_available');
+            setTimeout(loadConfig, 1000);
+        }
     };
     
     loadConfig();
@@ -84,7 +85,7 @@
                 aBody.push(sChunk);
             });
 
-            oRequest.on('end', () => {
+            oRequest.on('end', async () => {
                 oResponse.writeHead(202, {'Content-Type': 'text/plain'});
                 oResponse.end();
 
@@ -159,7 +160,7 @@
                     ? `Build Started for Auto-Release branch [${sRequestBranch}]`
                     : `Build Started for branch [${sRequestBranch}]`;
 
-                oSlack.send({
+                await oSlack.send({
                     attachments: [
                         {
                             fallback:    `${CONFIG.uri.domain}: ${sTitle} for repo ${sRepo}, commit ${sCompare} by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
@@ -177,8 +178,7 @@
                             mrkdwn_in:   ["text"]
                         }
                     ]
-                }, (err, response) => {});
-
+                });
 
                 const sBranchString     = sRequestBranch.replace(/[^/a-zA-Z0-9_-]/, '');
                 const sFile             = `${oBody.head_commit.id}.tgz`;
@@ -217,7 +217,7 @@
 
                 oActions.tar    = ['make', (_, fCallback) => TimedCommand('tar', `tar --exclude=${sFile} -czf ${sOutputFile} -C ${sBuildPath} .`, fCallback)];
 
-                oActions.upload = ['tar',  (_, fCallback) => {
+                oActions.upload = ['tar',  (oResult, fCallback) => {
                     const oTimer = oLogger.startTimer('Githook.upload');
 
                     S3.upload({
@@ -265,11 +265,11 @@
                 oActions.push     = ['tag',    (_, cb) => TimedCommand('push',       `cd ${sBuildPath} && git push --tags --quiet --force`,                 cb)];
                 oActions.clean    = ['push',   (_, cb) => TimedCommand('cleanBuild', `rm -rf ${sBuildPath}`,                                                cb)];
 
-                async.auto(oActions, (oError, oResults) => {
+                async.auto(oActions, async (oError, oResults) => {
                     if (oError) {
                         oLogger.e('Githook.async', {error: oError, build: JSON.stringify(oResults)});
 
-                        oSlack.send({
+                        await oSlack.send({
                             icon_emoji:  ":bangbang:",
                             attachments: [
                                 {
@@ -286,7 +286,7 @@
                                     mrkdwn_in:   ["text"]
                                 }
                             ]
-                        }, (oSlackError, oSlackResponse) => {});
+                        });
                         return;
                     }
 
@@ -321,9 +321,9 @@
                         )
                     }
 
-                    oSlack.send({
+                    await oSlack.send({
                         attachments: aAttachments
-                    }, (err, response) => {});
+                    });
 
                     oLogger.d('Githook.notified');
                     oLogger.summary();
@@ -388,7 +388,7 @@
         });
     };
 
-    const config = fConfigured => {
+    const config = async fConfigured => {
         async.parallel([
             fCallback => {
                 BUILDS = {};
@@ -415,24 +415,26 @@
 
                 fCallback();
             },
-            fCallback => {
+            async fCallback => {
                 const sMessage = `Hello ${CONFIG.uri.domain}! I'm here and waiting for github updates. to\n * ${Object.values(CONFIG.github.sources).join("\n * ")}`;
                 oSlack = new IncomingWebhook(CONFIG.slack.webhook.githook);
-                oSlack.send({
+
+                await oSlack.send({
                     text: sMessage
-                }, (oError, oResponse) => {
-                    GithookLogger.d('Githook.slack.greeted', {slack: CONFIG.slack.webhook.githook, message: sMessage});
-                    fCallback();
                 });
+
+                GithookLogger.d('Githook.slack.greeted', {slack: CONFIG.slack.webhook.githook, message: sMessage});
+
+                fCallback();
             },
-            fCallback => {
-                fs.access(CONFIG.path.cache, fs.constants.W_OK, oError => {
-                    if (oError) {
-                        fs.mkdir(CONFIG.path.cache, 0o777, fCallback)
-                    } else {
-                        fCallback()
-                    }
-                });
+            async fCallback => {
+                try {
+                    await fsPromises.access(CONFIG.path.cache, fs.constants.W_OK);
+                } catch (oError) {
+                    await fsPromises.mkdir(CONFIG.path.cache, 0o777);
+                }
+
+                fCallback();
             }
         ], () => {
             AWS_PS.setRegion(CONFIG.aws.region);
@@ -462,5 +464,5 @@
 
         http.createServer(handleHTTPRequest).listen(CONFIG.server.port);
 
-        GithookLogger.summary('Githook.Init');
+        GithookLogger.summary('Init');
     };
