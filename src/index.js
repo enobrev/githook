@@ -45,7 +45,7 @@
     process.on('SIGHUP', () => {
         GithookLogger.d('Githook.config.sighup.reload');
         delete require.cache[sConfigPath];
-        config();
+        loadConfig();
     });
 
     const handleHTTPRequest = function(oRequest, oResponse) {
