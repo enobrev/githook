@@ -85,7 +85,6 @@
             });
 
             oRequest.on('end', () => {
-
                 oResponse.writeHead(202, {'Content-Type': 'text/plain'});
                 oResponse.end();
 
@@ -131,8 +130,9 @@
                     return;
                 }
 
-                if (oBuild.branch_ref !== oBody.ref) {
-                    oLogger.d('Githook.repository.mismatched_branch', {
+                const bIsBuild = oBody.ref.indexOf('refs/heads') === 0;
+                if (!bIsBuild) {
+                    oLogger.d('Githook.not_a_build', {
                         repository: oBody.repository.full_name,
                         branch: {
                             commit: oBody.ref,
@@ -147,24 +147,30 @@
                     build: JSON.stringify(oBuild)
                 });
 
-                const aMessage       = oBody.commits.map(oCommit => `<${oCommit.url}|${oCommit.id.substring(0, 6)}>: ${oCommit.message}`);
-                const sRepo          = `<${oBody.repository.html_url}|${oBody.repository.full_name}>`;
-                const sCompareHashes = oBody.compare.split('/').pop();
-                const sCompare       = `<${oBody.compare}|${sCompareHashes}>`;
-                const sLogs          = `<https://kibana.${CONFIG.uri.domain}/app/kibana#/discover?_g=(filters:!(),refreshInterval:(display:Off,pause:!f,value:0),time:(from:now-1h,mode:quick,to:now))&_a=(columns:!('--i',severity,'--action','--ms'),interval:auto,query:(language:lucene,query:'%5C-%5C-t:${oLogger.thread_hash}'),sort:!('--i',asc))|Kibana>`;
+                const sRequestBranch    = oBody.ref.replace(/^refs\/heads\//, '');
+                const bIsReleaseBranch  = oBuild.branch === sRequestBranch;
+                const aMessage          = oBody.commits.map(oCommit => `<${oCommit.url}|${oCommit.id.substring(0, 6)}>: ${oCommit.message}`);
+                const sRepo             = `<${oBody.repository.html_url}|${oBody.repository.full_name}>`;
+                const sCompareHashes    = oBody.compare.split('/').pop();
+                const sCompare          = `<${oBody.compare}|${sCompareHashes}>`;
+                const sLogs             = `<https://kibana.${CONFIG.uri.domain}/app/kibana#/discover?_g=(filters:!(),refreshInterval:(display:Off,pause:!f,value:0),time:(from:now-1h,mode:quick,to:now))&_a=(columns:!('--i',severity,'--action','--ms'),interval:auto,query:(language:lucene,query:'%5C-%5C-t:${oLogger.thread_hash}'),sort:!('--i',asc))|Kibana>`;
+
+                let sTitle = bIsReleaseBranch
+                    ? `Build Started for Auto-Release branch [${sRequestBranch}]`
+                    : `Build Started for branch [${sRequestBranch}]`;
 
                 oSlack.send({
                     attachments: [
                         {
-                            fallback:    `${CONFIG.uri.domain}: I started a Build for repo ${sRepo}, commit ${sCompare} by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
-                            title:       "Build Started",
+                            fallback:    `${CONFIG.uri.domain}: ${sTitle} for repo ${sRepo}, commit ${sCompare} by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
+                            title:       sTitle,
                             title_link:  oBody.compare,
                             author_name: oBody.sender.login,
                             author_link: oBody.sender.html_url,
                             author_icon: oBody.sender.avatar_url,
                             color:       '#666666',
                             text:        `${CONFIG.uri.domain} - ${sRepo} - ${sCompare}`,
-                            mrkdwn_in:   ["text"]
+                            mrkdwn_in:   ["text", "title"]
                         },
                         {
                             text:        aMessage.join("\n"),
@@ -174,28 +180,28 @@
                 }, (err, response) => {});
 
 
-                const sFile       = `${oBody.head_commit.id}.tgz`;
-                const sOutputFile = path.join(CONFIG.path.cache, sFile);
-                const sReleaseKey = path.join(CONFIG.aws.path_release, oBuild.app, sFile);
-                const sReleaseURI = `https://${CONFIG.aws.hostname}/${CONFIG.aws.bucket_release}/${sReleaseKey}`;
-                const sTag        = `build-${dateFormat(new Date(), 'YYYY-MM-DD_HH-mm-ss')}`;
-                const sRelease    = `<${sReleaseURI}|${sTag}>`;
-                const sSSHUrl     = oBody.repository.ssh_url.replace('git@github.com', oBuild.ssh);
-                const sBuildPath  = path.join(CONFIG.path.build, oBody.head_commit.id);
+                const sBranchString     = sRequestBranch.replace(/[^/a-zA-Z0-9_-]/, '');
+                const sFile             = `${oBody.head_commit.id}.tgz`;
+                const sOutputFile       = path.join(CONFIG.path.cache, sFile);
+                const sReleaseKey       = path.join(CONFIG.aws.path_release, oBuild.app, sFile);
+                const sReleaseURI       = `https://${CONFIG.aws.hostname}/${CONFIG.aws.bucket_release}/${sReleaseKey}`;
+                const sTag              = `build/${sBranchString}/${dateFormat(new Date(), 'YYYY-MM-DD_HH-mm-ss')}`;
+                const sRelease          = `<${sReleaseURI}|${sTag}>`;
+                const sSSHUrl           = oBody.repository.ssh_url.replace('git@github.com', oBuild.ssh);
+                const sBuildPath        = path.join(CONFIG.path.build, oBody.head_commit.id);
 
                 const TimedCommand = (sAction, sCommand, fCallback) => {
-                    const oTimer = oLogger.startTimer(sAction);
+                    const oTimer = oLogger.startTimer(`Githook.${sAction}`);
                     exec(sCommand, (oError, sStdOut, sStdError) => {
                         oLogger.dt(oTimer);
                         fCallback(oError, {command: sCommand, stdout: sStdOut, stderr: sStdError});
                     })
                 };
 
-
                 const oActions = {
                     prep:                        cb  => TimedCommand('prep',      `rm -rf ${sBuildPath}`,                                                  cb),
                     clone:     ['prep',      (_, cb) => TimedCommand('clone',     `cd ${CONFIG.path.build} && git clone ${sSSHUrl} ${sBuildPath} --quiet`, cb)],
-                    checkout:  ['clone',     (_, cb) => TimedCommand('checkout',  `cd ${sBuildPath} && git checkout ${oBuild.branch} --quiet`,             cb)],
+                    checkout:  ['clone',     (_, cb) => TimedCommand('checkout',  `cd ${sBuildPath} && git checkout ${sRequestBranch} --quiet`,             cb)],
                     reset:     ['checkout',  (_, cb) => TimedCommand('reset',     `cd ${sBuildPath} && git reset --hard ${oBody.head_commit.id} --quiet`,  cb)]
                 };
 
@@ -226,25 +232,33 @@
                     });
                 }];
 
-                oActions.consul = ['upload', (_, fCallback) => {
-                    const oTimer = oLogger.startTimer('Githook.consul');
-
-                    consul.kv.set(`${oBuild.app}/release`, oBody.head_commit.id, (oError, oResult) => {
-                        oLogger.dt(oTimer);
-                        fCallback(oError, oResult);
+                if (bIsReleaseBranch) {
+                    oLogger.d('Githook.release', {
+                        repository: oBody.repository.full_name,
+                        branch: {
+                            commit: oBody.ref,
+                            build:  oBuild.branch_ref
+                        }
                     });
-                }];
 
-                oActions.parameter_store = ['upload', (_, fCallback) => {
-                    const oTimer     = oLogger.startTimer('Githook.parameter_store');
-                    const bOverwrite = true;
+                    oActions.consul = ['upload', (_, fCallback) => {
+                        const oTimer = oLogger.startTimer('Githook.consul');
+                        consul.kv.set(`${oBuild.app}/release`, oBody.head_commit.id, (oError, oResult) => {
+                            oLogger.dt(oTimer);
+                            fCallback(oError, oResult);
+                        });
+                    }];
 
-                    AWS_PS.put(`/${CONFIG.environment}/${oBuild.app}/release`, oBody.head_commit.id, AWS_PS.TYPE_STRING, bOverwrite, (oError, oResponse) => {
-                        oLogger.dt(oTimer);
-                        fCallback(oError, oResponse);
-                    });
-                }];
+                    oActions.parameter_store = ['upload', (_, fCallback) => {
+                        const oTimer     = oLogger.startTimer('Githook.parameter_store');
+                        const bOverwrite = true;
 
+                        AWS_PS.put(`/${CONFIG.environment}/${oBuild.app}/release`, oBody.head_commit.id, AWS_PS.TYPE_STRING, bOverwrite, (oError, oResponse) => {
+                            oLogger.dt(oTimer);
+                            fCallback(oError, oResponse);
+                        });
+                    }];
+                }
 
                 oActions.cleanTmp = ['upload', (_, cb) => TimedCommand('cleanTmp',   `rm -rf ${sOutputFile}`,                                               cb)];
                 oActions.tag      = ['upload', (_, cb) => TimedCommand('tag',        `cd ${sBuildPath} && git tag --force ${sTag} ${oBody.head_commit.id}`, cb)];
@@ -282,10 +296,15 @@
 
                     oLogger.d('Githook.complete', {commit: oBody.head_commit.id, build: JSON.stringify(oResults)});
 
+                    let sTitle = 'Build Complete';
+                    if (bIsReleaseBranch) {
+                        sTitle = 'Build Complete and Installed';
+                    }
+
                     let aAttachments = [
                         {
                             fallback:    `${CONFIG.uri.domain}: I finished a Build for repo ${sRepo}, commits ${sCompare} by *${oBody.sender.login}* with message:\n> ${oBody.head_commit.message}`,
-                            title:       `Build Complete`,
+                            title:       sTitle,
                             title_link:  oBody.compare,
                             color:       'good',
                             text:        `${CONFIG.uri.domain} - ${sRepo} - ${sCompare} - ${sRelease} - ${sLogs}`,
@@ -293,7 +312,7 @@
                     ];
 
                     if (aStdError && aStdError.length > 0) {
-                        aAttachments[0].title = "Build Complete, with stderr output";
+                        aAttachments[0].title = sTitle + ", with stderr output";
                         aAttachments[0].color = 'warning';
                         aAttachments.push(
                             {
