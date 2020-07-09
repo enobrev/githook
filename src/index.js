@@ -185,7 +185,7 @@
                 const sOutputFile       = path.join(CONFIG.path.cache, sFile);
                 const sReleaseKey       = path.join(CONFIG.aws.path_release, oBuild.app, sFile);
                 const sReleaseURI       = `https://${CONFIG.aws.hostname}/${CONFIG.aws.bucket_release}/${sReleaseKey}`;
-                const sTag              = `build/${sBranchString}/${dateFormat(new Date(), 'YYYY-MM-DD_HH-mm-ss')}`;
+                const sTag              = `build/${sBranchString}/${dateFormat(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`;
                 const sRelease          = `<${sReleaseURI}|${sTag}>`;
                 const sSSHUrl           = oBody.repository.ssh_url.replace('git@github.com', oBuild.ssh);
                 const sBuildPath        = path.join(CONFIG.path.build, oBody.head_commit.id);
