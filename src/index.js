@@ -21,6 +21,7 @@
     let BUILDS = {};
     let S3;
     let oSlack;
+    let aCompiledCommitParsers;
 
     const GithookLogger = new Logger({
         service: 'Githook',
@@ -148,9 +149,25 @@
                     build: JSON.stringify(oBuild)
                 });
 
+                const commitParser = oCommit => {
+                    let sMessage = oCommit.message;
+
+                    if (aCompiledCommitParsers && aCompiledCommitParsers.length > 0) {
+                        aCompiledCommitParsers.forEach(oParser => {
+                            try {
+                                sMessage = sMessage.replace(oParser.regex, oParser.replace)
+                            } catch (e) {
+                                oLogger.e('Githook.commitParser', {error: e, parser: oParser});
+                            }
+                        });
+                    }
+
+                    return `<${oCommit.url}|${oCommit.id.substring(0, 6)}>: ${sMessage}`;
+                }
+
                 const sRequestBranch    = oBody.ref.replace(/^refs\/heads\//, '');
                 const bIsReleaseBranch  = oBuild.branch === sRequestBranch;
-                const aMessage          = oBody.commits.map(oCommit => `<${oCommit.url}|${oCommit.id.substring(0, 6)}>: ${oCommit.message}`);
+                const aMessage          = oBody.commits.map(commitParser);
                 const sRepo             = `<${oBody.repository.html_url}|${oBody.repository.full_name}>`;
                 const sCompareHashes    = oBody.compare.split('/').pop();
                 const sCompare          = `<${oBody.compare}|${sCompareHashes}>`;
@@ -441,6 +458,14 @@
 
             S3 = new AWS.S3({
                 region: CONFIG.aws.region
+            });
+
+            const aCommitParsers = CONFIG.commit_parsers !== undefined ? JSON.parse(CONFIG.commit_parsers) : [];
+            aCompiledCommitParsers = aCommitParsers.map(oParser => {
+                return {
+                    regex:   new RegExp(oParser.regex, 'g'),
+                    replace: oParser.replace
+                }
             });
 
             GithookLogger.n('Githook.configured');
